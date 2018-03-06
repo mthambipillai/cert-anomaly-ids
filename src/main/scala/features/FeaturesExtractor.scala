@@ -14,12 +14,11 @@ import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import scala.language.postfixOps
 
 /*
-This class provides an API to extract and preprocess features from data.
+API to extract and preprocess features from data.
 */
 class FeatureExtractor(spark: SparkSession){
 	private var entityReverser:DataFrame=null
 	private var timeIntervalReverser:DataFrame=null
-	private var basicLogs:DataFrame=null
 	private var interval:Duration=null
 
 	/*
@@ -35,8 +34,7 @@ class FeatureExtractor(spark: SparkSession){
 		val df = spark.sql(sqlStmt)
 		val ee = EntityExtractor.getByName(extractor)
 		val (df2,newFeatures) = ee.extract(df, features)
-		basicLogs = df2
-		//frequentValues(df2,newFeatures)
+		//frequentValues(df2)
 		val res = newFeatures.map(f => f.parseCol(_)).foldLeft(df2){ (previousdf, parser) => parser(previousdf) }
 		this.entityReverser = res.select("srcentity","srcentityIndex","dstentity","dstentityIndex")
 								.withColumnRenamed("srcentityIndex","srcentityTransformed")
@@ -48,8 +46,8 @@ class FeatureExtractor(spark: SparkSession){
 	}
 
 	/*
-	Returns 3 DataFrames from 'df' representing the traffic features : aggregation over each interval of size 'interval'
-	per 1) src entity, 2) dst entity and 3) service.They need to be further processed before they can be used for machine learning.
+	Returns 2 DataFrames from 'df' representing the traffic features : aggregation over each interval of size 'interval'
+	per 1) src entity, and 2) dst entity.They need to be further processed before they can be used for machine learning.
 	*/
 	def extractRawTrafficFeatures(df: DataFrame, features: List[Feature], interval: Duration): (DataFrame,DataFrame) = {
 		this.interval = interval
@@ -68,22 +66,20 @@ class FeatureExtractor(spark: SparkSession){
 
 		val traffic1 = splits._1.tail.foldLeft(splits._1.head)(_.union(_))
 		val traffic2 = splits._2.tail.foldLeft(splits._2.head)(_.union(_))
-		//val traffic3 = splits._3.tail.foldLeft(splits._3.head)(_.union(_))
 		df.unpersist()
+		//frequentValues(traffic1)
 		(traffic1, traffic2)
 	}
 
 	/*
-	Returns 3 DataFrames representing the traffic features : aggregation over the whole 'df' per 1) src entity,
-	2) dst entity and 3) service.They need to be further processed before they can be used for machine learning.
+	Returns 2 DataFrames representing the traffic features : aggregation over the whole 'df' per 1) src entity,
+	and 2) dst entity.They need to be further processed before they can be used for machine learning.
 	*/
 	private def aggregate(df: DataFrame, features: List[Feature]): (DataFrame,DataFrame) = {
 		val aggs1 = features.filter(f => f.name!="srcentity").flatMap(_.aggregate())
 		val dfSrc = df.groupBy("srcentity").agg(aggs1.head, aggs1.tail:_*)
 		val aggs2 = features.filter(f => f.name!="dstentity").flatMap(_.aggregate())
 		val dfDst = df.groupBy("dstentity").agg(aggs2.head, aggs2.tail:_*)
-		//val aggs3 = features.filter(f => f.name!="service").flatMap(_.aggregate())
-		//val dfService = df.groupBy("service").agg(aggs3.head, aggs3.tail:_*)
 		(dfSrc, dfDst)
 	}
 
@@ -98,7 +94,7 @@ class FeatureExtractor(spark: SparkSession){
 	/*
 	Returns a DataFrame of final features ready for unsupervised machine learning to be
 	applied from a DataFrame 'df' of raw features. Each feature is normalized and the fields
-	are assembled into vectors.
+	are assembled into a single vector column.
 	*/
 	def getFinalFeatures(df: DataFrame): DataFrame = {
 		println("assembling...")
@@ -112,13 +108,15 @@ class FeatureExtractor(spark: SparkSession){
 
 	/*
 	Returns a DataFrame of final features ready for unsupervised machine learning to be
-	applied from a DataFrame 'df' of raw features. Each feature is normalized and the fields
-	are assembled into vectors.
+	applied from a DataFrame 'df' of raw features. Each feature is normalized and kept as a column.
 	*/
 	def getFinalFeaturesAsColumns(df: DataFrame): DataFrame = {
 		df.dtypes.foldLeft(df){ case (previousdf,(colName,colType)) => scaleColumn(previousdf, colName, colType)}
 	}
 
+	/*
+	Maps the values of column 'colName' in 'df' to the range [0,1].
+	*/
 	private def scaleColumn(df: DataFrame, colName: String, colType: String): DataFrame = {
 		val minMax = df.agg(min(colName),max(colName)).head
 		val scaleUDF = colType match {
@@ -127,7 +125,7 @@ class FeatureExtractor(spark: SparkSession){
 				val maxVal = minMax.getLong(1)
 				val diff = maxVal-minVal
 				if(diff==0){
-					udf((x:Long) => x)
+					udf((x:Long) => 1L)
 				}else{
 					udf((x:Long) => (x-minVal)/diff)
 				}
@@ -137,7 +135,7 @@ class FeatureExtractor(spark: SparkSession){
 				val maxVal = minMax.getDouble(1)
 				val diff = maxVal-minVal
 				if(diff==0){
-					udf((x:Double) => x)
+					udf((x:Double) => 1.0)
 				}else{
 					udf((x:Double) => (x-minVal)/diff)
 				}
@@ -158,9 +156,12 @@ class FeatureExtractor(spark: SparkSession){
 	/*
 	Returns a DataFrame of final features ready for unsupervised machine learning to be
 	applied from the file 'filePath' with all the features defined by 'features'. Every feature
-	is parsed and normalized.
+	is parsed and normalized. The 'mode' parameter defines whether these features are kept in
+	separate columns (value "columns") or assembled in a single vector column (value "assembled"). The
+	src and dst entities are extracted according to the 'extractor' parameter. The aggregation of logs by entities
+	is done over each interval of duration 'interval'.
 	*/
-	def extractAllFeatures(filePath: String, features: List[Feature] = Feature.getSSHFeatures(),
+	def extractFeatures(filePath: String, features: List[Feature] = Feature.getSSHFeatures(), mode: String = "columns",
 		extractor: String = "hostsWithIpFallback", interval: Duration = 6 hour): List[DataFrame] = {
 		println("Begin to extract basic features...")
 		val (basic, newFeatures) = extractRawBasicFeatures(filePath, features, extractor)
@@ -169,62 +170,36 @@ class FeatureExtractor(spark: SparkSession){
 		val traffic = extractRawTrafficFeatures(basic, newFeatures, interval)
 		val trafficList = List(traffic._1, traffic._2)
 		println("Done.")
-		println("Begin to assemble and scale the features...")
-		getFinalFeatures(basic)::trafficList.map(df => getFinalFeatures(df))
+		mode match{
+			case "columns" =>{
+				println("Begin to scale the features...")
+				trafficList.map(df => getFinalFeaturesAsColumns(df))
+			}
+			case "assembled" =>{
+				println("Begin to assemble and scale the features...")
+				trafficList.map(df => getFinalFeatures(df))
+			}
+		}
+		
 	}
 
 	/*
-	Returns a DataFrame of final features ready for unsupervised machine learning to be
-	applied from the file 'filePath' with all the features defined by 'features'. Every feature
-	is parsed and normalized.
+	Computes the original entity and timestamp interval for each parsed and scaled intrusion of 'intrusions'
+	back from the original values computed with 'extractRawBasicFeatures'.
 	*/
-	def extractFeatures(filePath: String, features: List[Feature] = Feature.getSSHFeatures(),
-		extractor: String = "hostsWithIpFallback", interval: Duration = 6 hour): List[DataFrame] = {
-		println("Begin to extract basic features...")
-		val (basic, newFeatures) = extractRawBasicFeatures(filePath, features, extractor)
-		println("Done.")
-		println("Begin to extract traffic features...")
-		val traffic = extractRawTrafficFeatures(basic, newFeatures, interval)
-		val trafficList = List(traffic._1, traffic._2)
-		println("Done.")
-		println("Begin to scale the features...")
-		trafficList.map(df => getFinalFeaturesAsColumns(df))
-	}
-
-	def reverseEntity(eType: String, transformed: Double):String = {
-		entityReverser.filter(col(eType+"Transformed") === transformed).select(eType).take(1)(0).getString(0)
-	}
-
-	def reverseTimeInterval(index: Double, transformed: Double):Long = {
-		timeIntervalReverser.filter(col("scaledtimeinterval") === transformed).select("timeinterval").take(1)(0).getLong(0)
-	}
-
-	def reverseResults(df: DataFrame, eType: String):DataFrame = {
+	def reverseResults(intrusions: DataFrame, eType: String):DataFrame = {
 		val neededCols = entityReverser.select(eType+"Transformed", eType)
-		val withentity = df.join(neededCols, df("scaled"+eType) === neededCols(eType+"Transformed"), "inner")
+		val withentity = intrusions.join(neededCols, intrusions("scaled"+eType) === neededCols(eType+"Transformed"), "inner")
 							.drop("scaled"+eType).drop(eType+"Transformed")
 		withentity.join(timeIntervalReverser, withentity("scaledtimeinterval") === timeIntervalReverser("scaledtimeinterval"), "inner")
 			.drop("scaledtimeinterval")
-	}
-
-	def inspectResult(results: DataFrame, eType: String, entity: String, timeinterval: Long):DataFrame = {
-		val r = results.select(eType,"timeinterval").filter(col(eType) === entity).filter(col("timeinterval") === timeinterval).take(1)(0)
-    	val entity2 = r.getString(0)
-    	val timeinterval2 = r.getLong(1)
-		val end = timeinterval+interval.toMillis
-		basicLogs.filter(col(eType) === entity2).filter(col("timestamp") >= timeinterval2).filter(col("timestamp") < end)
-	}
-
-	def inspectResult(eType: String, entity: String, timeinterval: Long):DataFrame = {
-		val end = timeinterval+interval.toMillis
-		basicLogs.filter(col(eType) === entity).filter(col("timestamp") >= timeinterval).filter(col("timestamp") < end)
 	}
 
 	/*
 	Outputs the counts of the 20 most frequent values for each feature. This function
 	should be used solely to gain insight about the data.
 	*/
-	private def frequentValues(df: DataFrame, features: List[Feature]): Unit = {
-		features.foreach(f => df.groupBy(f.name).count().orderBy(desc("count")).show())
+	private def frequentValues(df: DataFrame): Unit = {
+		df.columns.foreach(f => df.groupBy(f).count().orderBy(desc("count")).show())
 	}
 }

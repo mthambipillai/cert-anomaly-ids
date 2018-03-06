@@ -118,7 +118,10 @@ object Feature{
 		indexer.fit(df2).transform(df2).drop(columnName).withColumnRenamed(columnName+"2",columnName)
 	}
 
-
+	/*
+	Converts a column of src/dst entities string values to integers. This is not the same as parsing simple
+	string values because we need to keep the previous column to be later reversed.
+	*/
 	def parseEntityCol(df: DataFrame, columnName: String): DataFrame = {
 		val df2 = df.na.fill("NOT_RESOLVED", columnName :: Nil)
 		val indexer = new StringIndexer().setInputCol(columnName).setOutputCol(columnName+"Index").setHandleInvalid("keep")

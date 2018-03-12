@@ -33,7 +33,7 @@ object IntrusionKind{
 
 	val tooManyAuthAttempts = IntrusionKind("tooManyAuthAttempts", "The src entity tried to authenticate an unusual number of times to the same dst",
 		List("auth_attempts", "srcentity"), (df, src, minTimestamp, maxTimestamp) => {
-			val nbAttempts = 50000
+			val nbAttempts = 50
 			df.sample(true, 0.1).limit(500)
 				.withColumn("timestamp2", lit(minTimestamp)).drop("timestamp").withColumnRenamed("timestamp2", "timestamp")
 				.withColumn("srcentity2", lit(src)).drop("srcentity").withColumnRenamed("srcentity2", "srcentity")

@@ -10,22 +10,24 @@ import evaluation._
 import scala.language.postfixOps
 import java.io.File
 import com.typesafe.config.{ Config, ConfigFactory }
+import config._
 
 object MainIDSApp {
   def main(args: Array[String]) {
     val t0 = System.nanoTime()
+    val conf = IDSConfig.loadConf("local.conf")
     val spark = SparkSession.builder.appName("MainIDSApp").getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
-    spark.sqlContext.udf.register("MCV", Feature.mostCommonValue)
+
     val localRun = true
     val rwxMode = args(0)
 
     val eval = new Evaluator()
     def inject(df: DataFrame):DataFrame = eval
-      .injectIntrusions(df, IntrusionKind.allKinds.map(ik => (ik,4)), 1496361600902L, 1496447999253L, 1 hour)
+      .injectIntrusions(df, IntrusionKind.allKinds.map(ik => (ik,4)), 1496361600902L, 1496447999253L, conf.interval)
 
     val fe = new FeatureExtractor(spark, inject)
-    val finalFeaturesSrc = getFeatures(spark, localRun, rwxMode, fe, eval)
+    val finalFeaturesSrc = getFeatures(spark, localRun, rwxMode, fe, eval, conf)
     println(finalFeaturesSrc.count)
     if(rwxMode=="w"){
       spark.stop()
@@ -55,24 +57,10 @@ object MainIDSApp {
     df.withColumnRenamed(col, newCol)
   }
 
-  private def getFeatures(spark: SparkSession, localRun: Boolean, rwxMode: String, fe: FeatureExtractor, eval: Evaluator):DataFrame = {
-    val filePath = if(localRun){
-      "../brossh/*"
-    }else{
-      "/project/security/logs/BroSSH/year=2017/month=06/day=02/*"
-    }
+  private def getFeatures(spark: SparkSession, localRun: Boolean, rwxMode: String,
+    fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):DataFrame = {
     if(!localRun || rwxMode=="x" || rwxMode=="wx" || rwxMode=="w"){
-      val config = ConfigFactory.parseFile(new File("ids.conf"))
-      val filePath = config.getString("filepath")
-      val features = config.getString("features") match{
-        case "BroSSH" => Feature.getSSHFeatures()
-        case "BroConn" => Feature.getConnFeatures()
-      }
-      val extractor = config.getString("extractor")
-      val interval = Duration(config.getString("aggregationtime"))
-      val trafficMode = config.getString("trafficmode")
-      val scaleMode = config.getString("scalemode")
-      val finalFeatures = fe.extractFeatures(filePath, features, extractor, interval, trafficMode, scaleMode)
+      val finalFeatures = fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval, conf.trafficMode, conf.scaleMode)
       val finalFeaturesSrc = finalFeatures.head
       if(rwxMode!="x"){
         val w = finalFeaturesSrc.columns.foldLeft(finalFeaturesSrc){(prevdf, col) => rename(prevdf, col)}

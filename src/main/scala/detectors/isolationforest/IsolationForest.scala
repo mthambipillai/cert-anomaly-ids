@@ -12,22 +12,42 @@ This detector implements the algorithm described in "Liu, Ting and Zhou. Isolati
 */
 class IsolationForest(spark: SparkSession, data: DataFrame, nbTrees: Int, trainSize: Int) extends Detector with Serializable{
 	private val limit = ceil(log(trainSize)/log(2.0)).toInt
-	private val schema = data.dtypes
+	private val schema = {
+		val first = data.first
+		data.dtypes.map{case (colName, colType) => (colName, colType, first.fieldIndex(colName))}
+	}
 	private val c:Double = {//average path length as given in section 2 of (1)
 		val size = data.count()
 		val h = log(size-1)+0.5772156649
-		2*h - (2*(size-1)/size)
+		val res = 2*h - (2*(size-1)/size)
+		println("c value for IsolationForest : "+res)
+		res
 	}
-	private val trees = (1 to nbTrees).map(i => {
-		val train = data.sample(true, 0.1).limit(trainSize)
-		IsolationTree(train, limit)
-	})
+	private val samples = (1 to nbTrees).map(i => (i, data.sample(true, 0.1).limit(trainSize)))
+	private val trees = samples.map{case (i,s) => {
+		val train = s.collect()
+		val columnsHelpers = schema.map{ case (colName, colType, index) => 
+			val (minVal, maxVal) = colType match{
+				case "LongType" => {
+					val trainVals = train.map(r => r.getLong(index))
+					(trainVals.min, trainVals.max)
+				}
+				case "DoubleType" => {
+					val trainVals = train.map(r => r.getDouble(index))
+					(trainVals.min, trainVals.max)
+				}
+			}
+			ColumnHelper(colName, colType, index, minVal, maxVal)
+		}.toList
+		println("Building iTree nb "+i+"...")
+		IsolationTree(columnsHelpers, train, limit)
+	}}
 
 	/*
 	Maps to a score in range [0,1] as explained in section 2 of (1).
 	*/
 	private def scoreUDF(tlc: Double) = udf((x:Int) => {
-		val mean = (-1.0)*scala.math.abs(x/tlc)
+		val mean = x/tlc
 		scala.math.pow(2.0,mean)
 	})
 
@@ -40,7 +60,10 @@ class IsolationForest(spark: SparkSession, data: DataFrame, nbTrees: Int, trainS
 		val sumDF = data.sqlContext.createDataFrame(mappedRDD , newSchema)
 		println("Finding anomalies and their scores...")
 		val anomalies = sumDF.filter(col("pathlengthacc").leq(lit(pathLengthThreshold)))
-		anomalies.withColumn("score", scoreUDF(lc)(col("pathlengthacc"))).drop("pathlengthacc")
+		val res = anomalies.withColumn("score", scoreUDF(lc)(col("pathlengthacc"))).drop("pathlengthacc")
+		val minMax = res.agg(min("score"),max("score")).head
+		println("Min and max scores : "+minMax.getDouble(0)+" "+minMax.getDouble(1))
+		res.filter(col("score").geq(threshold))
 	}
 
 	/*

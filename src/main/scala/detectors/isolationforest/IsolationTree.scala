@@ -14,20 +14,20 @@ sealed trait IsolationTree{
 	Computes the lengths in the tree of each row in 'rows' starting with length 'pl'. The
 	schema is provided by 'columnsNamesTypes'.
 	*/
-	def pathLength(columnsNamesTypes: Array[(String,String)], rows: Seq[Row], pl:Int):Seq[Double]
+	def pathLength(columns: Array[(String,String,Int)], rows: Seq[Row], pl:Int):Seq[Double]
 }
 /*
 Leaf node, as explained in (1).
 */
 case class ExNode(size: Int) extends IsolationTree{
 	private val c:Double = {//average path length as given in section 2 of (1)
-		if(size==0) 0 else {
+		if(size<=1) 0 else {
 			val h = log(size-1)+0.5772156649
 			2*h - (2*(size-1)/size)
 		}
 	}
 
-	override def pathLength(columnsNamesTypes: Array[(String,String)], rows: Seq[Row], pl:Int):Seq[Double] = {
+	override def pathLength(columns: Array[(String,String,Int)], rows: Seq[Row], pl:Int):Seq[Double] = {
 		rows.map(r => pl+c)
 	}
 }
@@ -41,10 +41,9 @@ case class InNode(
 	splitVal: Double
 ) extends IsolationTree{
 
-	override def pathLength(columnsNamesTypes: Array[(String,String)], rows: Seq[Row], pl:Int):Seq[Double] = {
-		val (colName, colType) = columnsNamesTypes.filter(x => x._1==splitCol).head
+	override def pathLength(columns: Array[(String,String,Int)], rows: Seq[Row], pl:Int):Seq[Double] = {
+		val (colName, colType, index) = columns.filter(x => x._1==splitCol).head
 		if(rows.isEmpty) return Seq.empty[Double]
-		val index = rows.head.fieldIndex(colName)
 		val (leftRows, rightRows) = colType match{
 			case "LongType" => {
 				val leftSplit = rows.filter(r => r.getLong(index) <= splitVal)
@@ -57,59 +56,57 @@ case class InNode(
 				(leftSplit, rightSplit)
 			}
 		}
-		val leftLengths = left.pathLength(columnsNamesTypes, leftRows, pl+1)
-		val rightLengths = right.pathLength(columnsNamesTypes, rightRows, pl+1)
+		val leftLengths = left.pathLength(columns, leftRows, pl+1)
+		val rightLengths = right.pathLength(columns, rightRows, pl+1)
 		leftLengths ++ rightLengths
 	}
 }
 
 
 object IsolationTree{
-	val r = new Random(System.currentTimeMillis())
+	private val r = new Random(System.currentTimeMillis())
 
-	def apply(train: DataFrame, limit: Int): IsolationTree = {
-		println("Building iTree...")
-		build(train.dtypes, train.collect(), 0, limit)
+	def apply(columns: List[ColumnHelper], train: Array[Row], limit: Int): IsolationTree = {
+		val selectedColumns = scala.util.Random.shuffle(columns).take(limit)
+		build(selectedColumns, train, 0, limit)
 	}
 
 	/*
 	Builds an IsolationTree from the samples in 'train' starting at height 'currentHeight' with the limit 'heightLimit'.
-	The schema is provided by 'columnsNamesTypes'
+	The schema is provided by 'columns'
 	*/
-	private def build(columnsNamesTypes: Array[(String,String)], train: Array[Row], currentHeight: Int, heightLimit: Int): IsolationTree = {
+	private def build(columns: List[ColumnHelper], train: Array[Row], currentHeight: Int, heightLimit: Int): IsolationTree = {
 		if(currentHeight >= heightLimit || train.length<=1){
 			ExNode(train.length)
 		}else{
-			val (colName,colType) = columnsNamesTypes(r.nextInt(columnsNamesTypes.length))
-			val index = train(0).fieldIndex(colName)
-			val (splitLeft, splitRight, splitValue) = colType match {
+			val col = columns.head
+			val index = col.index
+			val (splitLeft, splitRight, splitValue) = col.dtype match {
 				case "LongType" => {
-					val trainVals = train.map(r => r.getLong(index))
-					val minVal = trainVals.min
-					val maxVal = trainVals.max
+					val minVal = col.minVal.asInstanceOf[Long]
+					val maxVal = col.maxVal.asInstanceOf[Long]
 					val splitValue = minVal + r.nextDouble()*(maxVal-minVal)
 					def splitLeft(r:Row):Boolean = {r.getLong(index) <= splitValue}
 					def splitRight(r:Row):Boolean = {r.getLong(index) > splitValue}
 					(splitLeft _, splitRight _, splitValue)
 				}
 				case "DoubleType" => {
-					val trainVals = train.map(r => r.getDouble(index))
-					val minVal = trainVals.min
-					val maxVal = trainVals.max
+					val minVal = col.minVal.asInstanceOf[Double]
+					val maxVal = col.maxVal.asInstanceOf[Double]
 					val splitValue = minVal + r.nextDouble()*(maxVal-minVal)
 					def splitLeft(r:Row):Boolean = {r.getDouble(index) <= splitValue}
 					def splitRight(r:Row):Boolean = {r.getDouble(index) > splitValue}
 					(splitLeft _, splitRight _, splitValue)
 				}
-				case _ => throw new Exception("Unable to parse the column data type : "+colType)
+				case _ => throw new Exception("Unable to parse the column data type : "+col.dtype)
 			}
 
 			val trainLeft = train.filter(splitLeft)
 			val trainRight = train.filter(splitRight)
 			
-			val leftTree = build(columnsNamesTypes, trainLeft, currentHeight+1,heightLimit)
-			val rightTree = build(columnsNamesTypes, trainRight, currentHeight+1,heightLimit)
-			InNode(leftTree, rightTree, colName, splitValue)
+			val leftTree = build(columns.tail, trainLeft, currentHeight+1,heightLimit)
+			val rightTree = build(columns.tail, trainRight, currentHeight+1,heightLimit)
+			InNode(leftTree, rightTree, col.name, splitValue)
 		}
 	}
 }

@@ -94,8 +94,8 @@ object EntityExtractor{
 		srcParser: (DataFrame,String) => DataFrame,
 		dstParser: (DataFrame,String) => DataFrame,
 		features: List[Feature]) : List[Feature] = {
-		val srcFeature = Feature("srcentity","Source Entity",srcParser,Feature.countDistinctOpt)
-		val dstFeature = Feature("dstentity","Destination Entity",dstParser,Feature.countDistinctOpt)
+		val srcFeature = Feature("srcentity","Source Entity",srcParser,Feature.countDistinctOnly)
+		val dstFeature = Feature("dstentity","Destination Entity",dstParser,Feature.countDistinctOnly)
 		srcFeature::(dstFeature::features)
 	}
 }

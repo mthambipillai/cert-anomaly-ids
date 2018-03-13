@@ -61,8 +61,6 @@ class IsolationForest(spark: SparkSession, data: DataFrame, nbTrees: Int, trainS
 		println("Finding anomalies and their scores...")
 		val anomalies = sumDF.filter(col("pathlengthacc").leq(lit(pathLengthThreshold)))
 		val res = anomalies.withColumn("score", scoreUDF(lc)(col("pathlengthacc"))).drop("pathlengthacc")
-		val minMax = res.agg(min("score"),max("score")).head
-		println("Min and max scores : "+minMax.getDouble(0)+" "+minMax.getDouble(1))
 		res.filter(col("score").geq(threshold))
 	}
 

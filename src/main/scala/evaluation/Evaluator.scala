@@ -25,13 +25,15 @@ class Evaluator() extends Serializable{
 
 	def evaluateResults(detected: DataFrame, trafficMode: String = "src", nbTop: Int, destFile: String):Unit={
 		val eType = trafficMode+"entity"
-		val top = detected.sort(desc("score")).limit(nbTop)
-		println("Writing top"+nbTop+" intrusions detected to "+destFile+".")
+		val distDetected = detected.dropDuplicates(Array(eType, "timeinterval"))
+		println("Number of distinct "+trafficMode+" entities involved : "+distDetected.count)
+		val top = distDetected.sort(desc("score")).limit(nbTop)
+		top.show(nbTop)
+		println("Writing top "+nbTop+" intrusions detected to "+destFile+".")
 		top.write.mode(SaveMode.Overwrite).parquet(destFile)
-		val first = detected.take(1)(0)
-		val entityIndex = first.fieldIndex(eType)
-		val timeIndex = first.fieldIndex("timeinterval")
-		val toCheck = detected.collect.zipWithIndex
+		val entityIndex = distDetected.columns.indexOf(eType+"entity")
+		val timeIndex = distDetected.columns.indexOf("timeinterval")
+		val toCheck = distDetected.collect.zipWithIndex
 		val init:List[Boolean] = Nil
 		val (results, remaining) = intrusions.foldLeft((init, toCheck)){case ((results, prevCheck), intrusion) => 
 			val (res, newCheck) = checkIntrusion(entityIndex, intrusion, prevCheck)

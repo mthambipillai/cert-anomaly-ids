@@ -15,16 +15,17 @@ case class IDSConfig(
 	val featuresFile: String,
 	val threshold: Double,
 	val topAnomalies: Int,
-	val anomaliesFile: String
+	val anomaliesFile: String,
+	val anomalyIndex: Int
 )
 
 object IDSConfig{
 	val parser = new scopt.OptionParser[IDSConfig]("ids") {
       head("ids", "1.0")
-      opt[String]('f', "features").action( (x, c) => x match {
+      opt[String]('b', "features").action( (x, c) => x match {
         case "BroSSH" => c.copy(features = Feature.getSSHFeatures())
         case "BroConn" =>  c.copy(features = Feature.getConnFeatures()) 
-      }).text("Source of features. Default is BroSSH.").validate(x => 
+      }).text("Source of features from Bro. Default is BroSSH.").validate(x => 
         if(x=="BroSSH" || x=="BroConn") success else failure("Invalid parameter value"))
       opt[String]('e', "extractor").action( (x, c) =>
         c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
@@ -32,7 +33,7 @@ object IDSConfig{
         c.copy(interval = x) ).text("Interval for aggregation per src/dst entity in Scala Duration format. Default is 1 hour.")
       opt[String]('t', "trafficmode").action( (x, c) =>
         c.copy(trafficMode = x) ).text("With which entity to aggregate. Can be either src, dst or all.")
-      opt[String]('t', "featuresfile").action( (x, c) =>
+      opt[String]('f', "featuresfile").action( (x, c) =>
         c.copy(featuresFile = x) ).text("Parquet file to read/write the scaled features.")
       help("help").text("Prints this usage text.")
 
@@ -45,14 +46,22 @@ object IDSConfig{
             c.copy(scaleMode = x) ).text("How to scale the features. Can be either unit or rescale.")
         )
       cmd("detectanomalies").action( (_, c) => c.copy(mode = "detectanomalies") ).
-        text("Read the computed features and detects anomalies.").
+        text("Read the computed features, detects anomalies and write them to a parquet file.").
         children(
           opt[Double]('t', "threshold").action( (x, c) =>
             c.copy(threshold = x) ).text("Threshold between 0.0 and 1.0 above which logs are considered as anomalies."),
-          opt[Int]('t', "topanomalies").action( (x, c) =>
+          opt[Int]('n', "nbtopanomalies").action( (x, c) =>
             c.copy(topAnomalies = x) ).text("Number of top anomalies to store."),
-          opt[String]('a', "anomaliesfile").action( (x, c) =>
-            c.copy(anomaliesFile = x) ).text("Parquet file to read/write detected anomalies.")
+          opt[String]('f', "anomaliesfile").action( (x, c) =>
+            c.copy(anomaliesFile = x) ).text("Parquet file where to write detected anomalies.")
+        )
+      cmd("inspectanomaly").action( (_, c) => c.copy(mode = "inspectanomaly") ).
+        text("Inspect the logs for a specific already detected anomaly.").
+        children(
+          opt[String]('f', "anomaliesfile").action( (x, c) =>
+            c.copy(anomaliesFile = x) ).text("Parquet file where to read detected anomalies."),
+          opt[Int]('i', "anomalyindex").action( (x, c) =>
+            c.copy(anomalyIndex = x) ).text("Index in the anomalies file of the anomaly that will be inspected.")
         )
     }
 	def loadConf(args: Array[String], confFile: String):IDSConfig = {
@@ -69,10 +78,11 @@ object IDSConfig{
 		val scaleMode = config.getString("scalemode")
 		val featuresFile = config.getString("featuresfile")
 		val threshold = config.getDouble("threshold")
-		val topAnomalies= config.getInt("topanomalies")
-		val anomaliesFile= config.getString("anomaliesfile")
+		val topAnomalies = config.getInt("nbtopanomalies")
+		val anomaliesFile = config.getString("anomaliesfile")
+		val anomalyIndex = config.getInt("anomalyindex")
 		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode,
-			featuresFile, threshold, topAnomalies, anomaliesFile)
+			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex)
 
 		parser.parse(args, fromFile).getOrElse{
 			System.exit(1)

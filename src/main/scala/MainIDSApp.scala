@@ -11,6 +11,7 @@ import scala.language.postfixOps
 import java.io.File
 import com.typesafe.config.{ Config, ConfigFactory }
 import config._
+import inspection._
 
 object MainIDSApp {
   def main(args: Array[String]) {
@@ -31,12 +32,15 @@ object MainIDSApp {
       case "detectanomalies" => {
         val features = readFeatures(spark, fe, eval, conf)
         features.cache()
-        val iForest = new IsolationForest(spark, features, 100, 256)
+        val iForest = new IsolationForest(spark, features, 10, 256)
         val anomalies = iForest.detect(conf.threshold)
         features.unpersist()
-        println("nb intrusions detected : "+anomalies.count)
         val resolvedAnomalies = fe.reverseResults(anomalies)
         eval.evaluateResults(resolvedAnomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)
+      }
+      case "inspectanomaly" => {
+        val ins = new Inspector(spark)
+        println(ins.extractInfo(conf.anomaliesFile, conf.topAnomalies, conf.anomalyIndex,  conf.trafficMode, conf.interval))
       }
       case _ => println("Invalid command.")
     }

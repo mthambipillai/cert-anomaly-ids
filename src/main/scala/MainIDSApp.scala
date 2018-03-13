@@ -19,34 +19,40 @@ object MainIDSApp {
     val spark = SparkSession.builder.appName("MainIDSApp").getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
    
-
     val eval = new Evaluator()
     def inject(df: DataFrame):DataFrame = eval
       .injectIntrusions(df, IntrusionKind.allKinds.map(ik => (ik,4)), 1496361600902L, 1496447999253L, conf.interval)
-
     val fe = new FeatureExtractor(spark, inject)
-    val finalFeaturesSrc = getFeatures(spark, fe, eval, conf)
-    println(finalFeaturesSrc.count)
-    if(conf.mode=="writefeatures"){
-      spark.stop()
-      val t1 = System.nanoTime()
-      println("Elapsed time: " + (((t1 - t0)/1000000000.0)/60.0) + "min")
-      System.exit(0)
+
+    conf.mode match{
+      case "writefeatures" => {
+        writeFeatures(fe, eval, conf)
+      }
+      case "detectanomalies" => {
+        val features = readFeatures(spark, fe, eval, conf)
+        features.cache()
+        val iForest = new IsolationForest(spark, features, 100, 256)
+        val anomalies = iForest.detect(conf.threshold)
+        features.unpersist()
+        println("nb intrusions detected : "+anomalies.count)
+        val resolvedAnomalies = fe.reverseResults(anomalies)
+        eval.evaluateResults(resolvedAnomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)
+      }
+      case _ => println("Invalid command.")
     }
-    finalFeaturesSrc.cache()
-    finalFeaturesSrc.printSchema
 
-    val iForest = new IsolationForest(spark, finalFeaturesSrc, 100, 256)
-    val anomalies = iForest.detect(0.51)
-    finalFeaturesSrc.unpersist()
-    println("nb intrusions : "+anomalies.count)
-    val resolvedAnomalies = fe.reverseResults(anomalies)
-
-    eval.evaluateResults(resolvedAnomalies)
-
+    spark.stop()
     val t1 = System.nanoTime()
     println("Elapsed time: " + (((t1 - t0)/1000000000.0)/60.0) + "min")
-    spark.stop()
+  }
+
+  private def writeFeatures(fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):Unit = {
+    val finalFeatures = fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval, conf.trafficMode, conf.scaleMode)
+    val finalFeaturesSrc = finalFeatures.head
+    val w = finalFeaturesSrc.columns.foldLeft(finalFeaturesSrc){(prevdf, col) => rename(prevdf, col)}
+    w.write.mode(SaveMode.Overwrite).parquet(conf.featuresFile)
+    fe.persistReversers()
+    eval.persistIntrusions()
   }
 
   private def rename(df: DataFrame, col: String):DataFrame = {
@@ -55,19 +61,9 @@ object MainIDSApp {
     df.withColumnRenamed(col, newCol)
   }
 
-  private def getFeatures(spark: SparkSession, fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):DataFrame = {
-    if(conf.mode=="writefeatures"){
-      val finalFeatures = fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval, conf.trafficMode, conf.scaleMode)
-      val finalFeaturesSrc = finalFeatures.head
-      val w = finalFeaturesSrc.columns.foldLeft(finalFeaturesSrc){(prevdf, col) => rename(prevdf, col)}
-      w.write.mode(SaveMode.Overwrite).parquet(conf.featuresFile)
-      fe.persistReversers()
-      eval.persistIntrusions()
-      finalFeaturesSrc
-    }else{
-      fe.loadReversers()
-      eval.loadIntrusions()
-      spark.read.parquet(conf.featuresFile)
-    }
+  private def readFeatures(spark: SparkSession, fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):DataFrame = {
+    fe.loadReversers()
+    eval.loadIntrusions()
+    spark.read.parquet(conf.featuresFile)
   }
 }

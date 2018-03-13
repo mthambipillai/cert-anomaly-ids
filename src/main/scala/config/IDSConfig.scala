@@ -12,7 +12,10 @@ case class IDSConfig(
 	val interval: Duration,
 	val trafficMode: String,
 	val scaleMode: String,
-	val featuresFile: String
+	val featuresFile: String,
+	val threshold: Double,
+	val topAnomalies: Int,
+	val anomaliesFile: String
 )
 
 object IDSConfig{
@@ -34,7 +37,7 @@ object IDSConfig{
       help("help").text("Prints this usage text.")
 
       cmd("writefeatures").action( (_, c) => c.copy(mode = "writefeatures") ).
-        text("extract features from the logs, scale them and write them to a parquet file.").
+        text("Extract features from the logs, scale them and write them to a parquet file.").
         children(
           opt[String]('l', "logspath").action( (x, c) =>
             c.copy(filePath = x) ).text("Input path for parquet log file(s)."),
@@ -42,7 +45,15 @@ object IDSConfig{
             c.copy(scaleMode = x) ).text("How to scale the features. Can be either unit or rescale.")
         )
       cmd("detectanomalies").action( (_, c) => c.copy(mode = "detectanomalies") ).
-        text("read the computed features and detects anomalies.")
+        text("Read the computed features and detects anomalies.").
+        children(
+          opt[Double]('t', "threshold").action( (x, c) =>
+            c.copy(threshold = x) ).text("Threshold between 0.0 and 1.0 above which logs are considered as anomalies."),
+          opt[Int]('t', "topanomalies").action( (x, c) =>
+            c.copy(topAnomalies = x) ).text("Number of top anomalies to store."),
+          opt[String]('a', "anomaliesfile").action( (x, c) =>
+            c.copy(anomaliesFile = x) ).text("Parquet file to read/write detected anomalies.")
+        )
     }
 	def loadConf(args: Array[String], confFile: String):IDSConfig = {
 		val config = ConfigFactory.parseFile(new File(confFile))
@@ -57,8 +68,15 @@ object IDSConfig{
 		val trafficMode = config.getString("trafficmode")
 		val scaleMode = config.getString("scalemode")
 		val featuresFile = config.getString("featuresfile")
-		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode, featuresFile)
+		val threshold = config.getDouble("threshold")
+		val topAnomalies= config.getInt("topanomalies")
+		val anomaliesFile= config.getString("anomaliesfile")
+		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode,
+			featuresFile, threshold, topAnomalies, anomaliesFile)
 
-		parser.parse(args, fromFile).getOrElse{throw new Exception("Invalid command or parameter.")}
+		parser.parse(args, fromFile).getOrElse{
+			System.exit(1)
+			fromFile
+		}
 	}
 }

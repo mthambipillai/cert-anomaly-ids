@@ -5,6 +5,7 @@ import scala.math.abs
 import scala.util.Random
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.SaveMode
 import java.io._
 
 class Evaluator() extends Serializable{
@@ -22,11 +23,11 @@ class Evaluator() extends Serializable{
 		allIntrusions.foldLeft(df){ (previousdf, intrusion) => intrusion.inject(previousdf, cols)}
 	}
 
-	def evaluateResults(detected: DataFrame, eType: String = "srcentity"):Unit={
-		val top = detected.sort(desc("score")).limit(10).collect
-		println("Printing top 10 intrusions detected :")
-		top.foreach(println)
-		println
+	def evaluateResults(detected: DataFrame, trafficMode: String = "src", nbTop: Int, destFile: String):Unit={
+		val eType = trafficMode+"entity"
+		val top = detected.sort(desc("score")).limit(nbTop)
+		println("Writing top"+nbTop+" intrusions detected to "+destFile+".")
+		top.write.mode(SaveMode.Overwrite).parquet(destFile)
 		val first = detected.take(1)(0)
 		val entityIndex = first.fieldIndex(eType)
 		val timeIndex = first.fieldIndex("timeinterval")

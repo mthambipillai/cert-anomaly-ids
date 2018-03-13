@@ -147,14 +147,14 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 		if(eType=="srcentity"){
 			this.srcEntityReverser = srcEntityReverser.join(dfScaled.select("srcentityTemp", "scaledsrcentity"),
 				dfScaled("srcentityTemp") === srcEntityReverser("srcentityTemp"), "inner").drop("srcentityTemp")
-				.withColumnRenamed("scaledsrcentity", "srcentityTransformed").drop("scaledsrcentity")
+				.withColumnRenamed("scaledsrcentity", "srcentityTransformed").drop("scaledsrcentity").dropDuplicates(Array("srcentityTransformed"))
 		}
 		if(eType=="dstentity"){
-			this.srcEntityReverser = srcEntityReverser.join(dfScaled.select("dstentityTemp", "scaleddstentity"),
-				dfScaled("dstentityTemp") === srcEntityReverser("dstentityTemp"), "inner").drop("dstentityTemp")
-				.withColumnRenamed("scaleddstentity", "dstentityTransformed").drop("scaleddstentity").distinct
+			this.dstEntityReverser = dstEntityReverser.join(dfScaled.select("dstentityTemp", "scaleddstentity"),
+				dfScaled("dstentityTemp") === dstEntityReverser("dstentityTemp"), "inner").drop("dstentityTemp")
+				.withColumnRenamed("scaleddstentity", "dstentityTransformed").drop("scaleddstentity").dropDuplicates(Array("dstentityTransformed"))
 		}
-		this.timeIntervalReverser = dfScaled.select("timeinterval","scaledtimeinterval").distinct
+		this.timeIntervalReverser = dfScaled.select("timeinterval","scaledtimeinterval").dropDuplicates(Array("scaledtimeinterval"))
 		dfScaled.drop("srcentityTemp","dstentityTemp","timeinterval")
 	}
 
@@ -241,9 +241,9 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 			case "dstentity" => this.dstEntityReverser
 		}
 		val withentity = intrusions.join(reverser, intrusions("scaled"+eType) === reverser(eType+"Transformed"), "left")
-							.drop("scaled"+eType).drop(eType+"Transformed")
+							.drop("scaled"+eType).drop(eType+"Transformed").distinct
 		withentity.join(timeIntervalReverser, withentity("scaledtimeinterval") === timeIntervalReverser("scaledtimeinterval"), "left")
-			.drop("scaledtimeinterval")
+			.drop("scaledtimeinterval").distinct
 	}
 
 	/*

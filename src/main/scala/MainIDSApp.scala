@@ -26,10 +26,10 @@ object MainIDSApp {
     val fe = new FeatureExtractor(spark, inject)
 
     conf.mode match{
-      case "writefeatures" => {
+      case "extract" => {
         writeFeatures(fe, eval, conf)
       }
-      case "detectanomalies" => {
+      case "detect" => {
         val features = readFeatures(spark, fe, eval, conf)
         features.cache()
         val iForest = new IsolationForest(spark, features, 10, 256)
@@ -38,7 +38,7 @@ object MainIDSApp {
         val resolvedAnomalies = fe.reverseResults(anomalies)
         eval.evaluateResults(resolvedAnomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)
       }
-      case "inspectanomaly" => {
+      case "inspect" => {
         val ins = new Inspector(spark)
         ins.inspect(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, conf.topAnomalies,
           conf.anomalyIndex,  conf.trafficMode, conf.interval)

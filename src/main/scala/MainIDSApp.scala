@@ -40,7 +40,8 @@ object MainIDSApp {
       }
       case "inspectanomaly" => {
         val ins = new Inspector(spark)
-        println(ins.extractInfo(conf.anomaliesFile, conf.topAnomalies, conf.anomalyIndex,  conf.trafficMode, conf.interval))
+        ins.inspect(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, conf.topAnomalies,
+          conf.anomalyIndex,  conf.trafficMode, conf.interval)
       }
       case _ => println("Invalid command.")
     }
@@ -53,6 +54,7 @@ object MainIDSApp {
   private def writeFeatures(fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):Unit = {
     val finalFeatures = fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval, conf.trafficMode, conf.scaleMode)
     val finalFeaturesSrc = finalFeatures.head
+    finalFeaturesSrc.show()
     val w = finalFeaturesSrc.columns.foldLeft(finalFeaturesSrc){(prevdf, col) => rename(prevdf, col)}
     w.write.mode(SaveMode.Overwrite).parquet(conf.featuresFile)
     fe.persistReversers()

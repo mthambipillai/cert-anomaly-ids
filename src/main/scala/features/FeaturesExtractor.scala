@@ -43,10 +43,12 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 
 		val res = newFeatures.map(f => f.parseCol(_)).foldLeft(dfInjected){ (previousdf, parser) => parser(previousdf) }
 
-		this.srcEntityReverser = res.select("srcentity","srcentityIndex").withColumnRenamed("srcentityIndex","srcentityTemp").distinct
-		this.dstEntityReverser = res.select("dstentity","dstentityIndex").withColumnRenamed("dstentityIndex","dstentityTemp").distinct
+		this.srcEntityReverser = res.select("srcentity","srcentityIndex")
+			.withColumnRenamed("srcentityIndex","srcentityTransformed").distinct
+		this.dstEntityReverser = res.select("dstentity","dstentityIndex")
+			.withColumnRenamed("dstentityIndex","dstentityTransformed").distinct
 		val finalRes = res.drop("srcentity").withColumnRenamed("srcentityIndex","srcentity")
-							.drop("dstentity").withColumnRenamed("dstentityIndex","dstentity")
+						.drop("dstentity").withColumnRenamed("dstentityIndex","dstentity")
 		(finalRes, newFeatures)
 	}
 
@@ -140,11 +142,11 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 			val schema = schemaB.value
 			iter.map(r => normalizeRowToUnit(r, schema, eType))
 		})
-		val entityField = StructField(eType+"Temp", DoubleType, true)
+		val entityField = StructField(eType, DoubleType, true)
 		val timeField = StructField("timeinterval", DoubleType, true)
 		val newSchema = StructType(Seq(entityField, timeField)++df.schema.map(sf => StructField("scaled"+sf.name, DoubleType, true)))
-		val dfScaled = df.sqlContext.createDataFrame(scaledRDD, newSchema)
-		if(eType=="srcentity"){
+		df.sqlContext.createDataFrame(scaledRDD, newSchema)
+		/*if(eType=="srcentity"){
 			this.srcEntityReverser = srcEntityReverser.join(dfScaled.select("srcentityTemp", "scaledsrcentity"),
 				dfScaled("srcentityTemp") === srcEntityReverser("srcentityTemp"), "inner").drop("srcentityTemp")
 				.withColumnRenamed("scaledsrcentity", "srcentityTransformed").drop("scaledsrcentity").dropDuplicates(Array("srcentityTransformed"))
@@ -155,7 +157,7 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 				.withColumnRenamed("scaleddstentity", "dstentityTransformed").drop("scaleddstentity").dropDuplicates(Array("dstentityTransformed"))
 		}
 		this.timeIntervalReverser = dfScaled.select("timeinterval","scaledtimeinterval").dropDuplicates(Array("scaledtimeinterval"))
-		dfScaled.drop("srcentityTemp","dstentityTemp","timeinterval")
+		dfScaled.drop("srcentityTemp","dstentityTemp","timeinterval")*/
 	}
 
 	private def rescale(df: DataFrame): DataFrame = {
@@ -240,10 +242,20 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 			case "srcentity" => this.srcEntityReverser
 			case "dstentity" => this.dstEntityReverser
 		}
-		val withentity = intrusions.join(reverser, intrusions("scaled"+eType) === reverser(eType+"Transformed"), "left")
-							.drop("scaled"+eType).drop(eType+"Transformed").distinct
-		withentity.join(timeIntervalReverser, withentity("scaledtimeinterval") === timeIntervalReverser("scaledtimeinterval"), "left")
+		val withentity = if(intrusions.columns.contains(eType)){
+			val intrusions2 = intrusions.withColumnRenamed(eType,eType+"Index")
+			intrusions2.join(reverser, intrusions2(eType+"Index") === reverser(eType+"Transformed"), "left")
+				.drop(eType+"Transformed").drop(eType+"Index").drop("scaled"+eType).distinct
+		}else{
+			intrusions.join(reverser, intrusions("scaled"+eType) === reverser(eType+"Transformed"), "left")
+				.drop("scaled"+eType).drop(eType+"Transformed").distinct
+		}
+		if(intrusions.columns.contains("timeinterval")){
+			withentity.drop("scaledtimeinterval")
+		}else{
+			withentity.join(timeIntervalReverser, withentity("scaledtimeinterval") === timeIntervalReverser("scaledtimeinterval"), "left")
 			.drop("scaledtimeinterval").distinct
+		}
 	}
 
 	/*

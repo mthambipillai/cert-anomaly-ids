@@ -1,0 +1,6 @@
+*.parquet
+project/*
+target/*
+*.keytab
+metastore_db/*
+lib_managed/*

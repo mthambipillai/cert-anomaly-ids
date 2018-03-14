@@ -26,12 +26,15 @@ class Evaluator() extends Serializable{
 	def evaluateResults(detected: DataFrame, trafficMode: String = "src", nbTop: Int, destFile: String):Unit={
 		val eType = trafficMode+"entity"
 		val distDetected = detected.dropDuplicates(Array(eType, "timeinterval"))
+		distDetected.groupBy("timeinterval").count().orderBy(desc("count")).show()
 		println("Number of distinct "+trafficMode+" entities involved : "+distDetected.count)
-		val top = distDetected.sort(desc("score")).limit(nbTop)
+		val otherCols = detected.columns.toList.filterNot(c => c==eType || c=="timeinterval")
+		val newCols = eType::("timeinterval"::otherCols)
+		val top = distDetected.sort(desc("score")).limit(nbTop).select(newCols.head, newCols.tail:_*)
 		top.show(nbTop)
 		println("Writing top "+nbTop+" intrusions detected to "+destFile+".")
 		top.write.mode(SaveMode.Overwrite).parquet(destFile)
-		val entityIndex = distDetected.columns.indexOf(eType+"entity")
+		val entityIndex = distDetected.columns.indexOf(eType)
 		val timeIndex = distDetected.columns.indexOf("timeinterval")
 		val toCheck = distDetected.collect.zipWithIndex
 		val init:List[Boolean] = Nil
@@ -42,7 +45,7 @@ class Evaluator() extends Serializable{
 		val nbDetected = results.filter(_==true).size
 		val nbTotal = intrusions.size
 		val recall = 100.0*(nbDetected.toDouble/nbTotal.toDouble)
-		println("Number of intrusions detected (Recall) : "+nbDetected+"/"+nbTotal+" = "+recall+"%\n")
+		println("Number of known intrusions detected (Recall) : "+nbDetected+"/"+nbTotal+" = "+recall+"%\n")
 	}
 
 	private def generateIntrusion(intrusionKind: IntrusionKind, minTimestamp: Long,

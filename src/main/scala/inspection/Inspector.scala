@@ -21,7 +21,6 @@ class Inspector(spark: SparkSession){
 		val entityIndex = anomalies.columns.indexOf(eType+"entity")
 		val timeIndex = anomalies.columns.indexOf("timeinterval")
 		val row = anomalies.collect()(rowNumber)
-		//println(row.mkString)
 		val entity = row.getString(entityIndex)
 		val beginTimestamp = (row.getDouble(timeIndex)).toLong
 		val endTimeStamp = beginTimestamp+interval.toMillis
@@ -35,9 +34,8 @@ class Inspector(spark: SparkSession){
 		val col = eType+colType
 		val logFile = spark.read.parquet(filePath)
 		logFile.createOrReplaceTempView("logfiles")
-		println(entity+" "+dateFormatter.format(new Date(beginTimestamp))+" "+" "+dateFormatter.format(new Date(endTimeStamp)))
-		val sqlStmt = "SELECT "+features.map(_.name).mkString(",")+" FROM logfiles WHERE "+col+"='"+originalEntity+"'"// AND timestamp>="+
-			//beginTimestamp+" AND timestamp<="+endTimeStamp
+		val sqlStmt = "SELECT "+features.map(_.name).mkString(",")+" FROM logfiles WHERE "+col+"='"+originalEntity+
+			"' AND timestamp>="+beginTimestamp+" AND timestamp<="+endTimeStamp
 		val df = spark.sql(sqlStmt).sort(asc("timestamp"))
 		val df2 = df.withColumn("timestamp2", toDate(dateFormatter)(df("timestamp")))
 			.drop("timestamp").withColumnRenamed("timestamp2", "timestamp")

@@ -16,7 +16,7 @@ import inspection._
 object MainIDSApp {
   def main(args: Array[String]) {
     val t0 = System.nanoTime()
-    val conf = IDSConfig.loadConf(args, "local.conf")
+    val conf = IDSConfig.loadConf(args, "application.conf")
     val spark = SparkSession.builder.appName("MainIDSApp").getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
    
@@ -32,7 +32,7 @@ object MainIDSApp {
       case "detect" => {
         val features = readFeatures(spark, fe, eval, conf)
         features.cache()
-        val iForest = new IsolationForest(spark, features, 10, 256)
+        val iForest = new IsolationForest(spark, features, conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
         val anomalies = iForest.detect(conf.threshold)
         features.unpersist()
         val resolvedAnomalies = fe.reverseResults(anomalies)

@@ -26,12 +26,10 @@ class Evaluator() extends Serializable{
 	def evaluateResults(detected: DataFrame, trafficMode: String = "src", nbTop: Int, destFile: String):Unit={
 		val eType = trafficMode+"entity"
 		val distDetected = detected.dropDuplicates(Array(eType, "timeinterval"))
-		distDetected.groupBy("timeinterval").count().orderBy(desc("count")).show()
 		println("Number of distinct "+trafficMode+" entities involved : "+distDetected.count)
 		val otherCols = detected.columns.toList.filterNot(c => c==eType || c=="timeinterval")
 		val newCols = eType::("timeinterval"::otherCols)
 		val top = distDetected.sort(desc("score")).limit(nbTop).select(newCols.head, newCols.tail:_*)
-		top.show(nbTop)
 		println("Writing top "+nbTop+" intrusions detected to "+destFile+".")
 		top.write.mode(SaveMode.Overwrite).parquet(destFile)
 		val entityIndex = distDetected.columns.indexOf(eType)

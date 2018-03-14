@@ -5,6 +5,7 @@ import features.Feature
 import scala.concurrent.duration._
 
 case class IDSConfig(
+  //Global parameters
 	val mode: String,
 	val filePath: String,
 	val features: List[Feature],
@@ -16,7 +17,9 @@ case class IDSConfig(
 	val threshold: Double,
 	val topAnomalies: Int,
 	val anomaliesFile: String,
-	val anomalyIndex: Int
+	val anomalyIndex: Int,
+  //IsolationForest parameters
+  val isolationForest: IsolationForestConfig
 )
 
 object IDSConfig{
@@ -83,8 +86,9 @@ object IDSConfig{
 		val topAnomalies = config.getInt("nbtopanomalies")
 		val anomaliesFile = config.getString("anomaliesfile")
 		val anomalyIndex = config.getInt("anomalyindex")
+    val isolationForest = IsolationForestConfig.load(config)
 		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode,
-			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex)
+			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex, isolationForest)
 
 		parser.parse(args, fromFile).getOrElse{
 			System.exit(1)

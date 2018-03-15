@@ -22,7 +22,6 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	private var srcEntityReverser:DataFrame=null
 	private var dstEntityReverser:DataFrame=null
 	private var timeIntervalReverser:DataFrame=null
-	private var interval:Duration=null
 
 	/*
 	Returns a DataFrame from the file 'filePath' with all the features defined by 'features'
@@ -42,14 +41,7 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 		val dfInjected = inject(df2)
 
 		val res = newFeatures.map(f => f.parseCol(_)).foldLeft(dfInjected){ (previousdf, parser) => parser(previousdf) }
-
-		this.srcEntityReverser = res.select("srcentity","srcentityIndex")
-			.withColumnRenamed("srcentityIndex","srcentityTransformed").distinct
-		this.dstEntityReverser = res.select("dstentity","dstentityIndex")
-			.withColumnRenamed("dstentityIndex","dstentityTransformed").distinct
-		val finalRes = res.drop("srcentity").withColumnRenamed("srcentityIndex","srcentity")
-						.drop("dstentity").withColumnRenamed("dstentityIndex","dstentity")
-		(finalRes, newFeatures)
+		(res, newFeatures)
 	}
 
 	/*
@@ -57,7 +49,6 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	per 1) src entity, and 2) dst entity.They need to be further processed before they can be used for machine learning.
 	*/
 	def extractRawTrafficFeatures(df: DataFrame, features: List[Feature], interval: Duration, mode: String): List[DataFrame] = {
-		this.interval = interval
 		val minMax = df.agg(min("timestamp"),max("timestamp")).head
 		val minTime = minMax.getDouble(0)
 		val maxTime = minMax.getDouble(1)
@@ -85,8 +76,8 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	and 2) dst entity.They need to be further processed before they can be used for machine learning.
 	*/
 	private def aggregate(df: DataFrame, features: List[Feature], eType: String): DataFrame = {
-		val aggs1 = features.filter(f => f.name!=eType).flatMap(_.aggregate())
-		df.groupBy(eType).agg(aggs1.head, aggs1.tail:_*)
+		val aggs1 = features.filter(f => f.name!=eType || f.name!=eType+"Index").flatMap(_.aggregate())
+		df.groupBy(eType,eType+"Index").agg(aggs1.head, aggs1.tail:_*)
 	}
 
 	/*
@@ -118,7 +109,19 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	*/
 	def getFinalFeaturesAsColumns(df: DataFrame, scaleMode: String = "unit", eType: String): DataFrame = scaleMode match {
 		case "unit" =>  normalizeToUnit(df, eType)
-		case "rescale" => rescale(df)
+		case "rescale" => rescale(df, eType)
+	}
+
+	private def normalizeToUnit(df: DataFrame, eType: String): DataFrame = {
+		val schemaB = spark.sparkContext.broadcast(df.dtypes.filter(_._1!=eType))
+		val scaledRDD = df.rdd.mapPartitions(iter => {
+			val schema = schemaB.value
+			iter.map(r => normalizeRowToUnit(r, schema, eType))
+		})
+		val entityField = StructField(eType, StringType, true)
+		val timeField = StructField("timeinterval", DoubleType, true)
+		val newSchema = StructType(Seq(entityField, timeField)++schemaB.value.map(sf => StructField("scaled"+sf._1, DoubleType, true)))
+		df.sqlContext.createDataFrame(scaledRDD, newSchema)
 	}
 
 	private def normalizeRowToUnit(row: Row, schema: Array[(String, String)], eType: String): Row = {
@@ -131,37 +134,13 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 		}
 		val norm = scala.math.sqrt(values.map(v => v*v).sum)
 		val scaled = values.map(_/norm)
-		val entity = row.getDouble(row.fieldIndex(eType))
+		val entity = row.getString(row.fieldIndex(eType))
 		val t = row.getDouble(row.fieldIndex("timeinterval"))
 		Row.fromSeq(Seq(entity, t) ++ scaled.toSeq)
 	}
 
-	private def normalizeToUnit(df: DataFrame, eType: String): DataFrame = {
-		val schemaB = spark.sparkContext.broadcast(df.dtypes)
-		val scaledRDD = df.rdd.mapPartitions(iter => {
-			val schema = schemaB.value
-			iter.map(r => normalizeRowToUnit(r, schema, eType))
-		})
-		val entityField = StructField(eType, DoubleType, true)
-		val timeField = StructField("timeinterval", DoubleType, true)
-		val newSchema = StructType(Seq(entityField, timeField)++df.schema.map(sf => StructField("scaled"+sf.name, DoubleType, true)))
-		df.sqlContext.createDataFrame(scaledRDD, newSchema)
-		/*if(eType=="srcentity"){
-			this.srcEntityReverser = srcEntityReverser.join(dfScaled.select("srcentityTemp", "scaledsrcentity"),
-				dfScaled("srcentityTemp") === srcEntityReverser("srcentityTemp"), "inner").drop("srcentityTemp")
-				.withColumnRenamed("scaledsrcentity", "srcentityTransformed").drop("scaledsrcentity").dropDuplicates(Array("srcentityTransformed"))
-		}
-		if(eType=="dstentity"){
-			this.dstEntityReverser = dstEntityReverser.join(dfScaled.select("dstentityTemp", "scaleddstentity"),
-				dfScaled("dstentityTemp") === dstEntityReverser("dstentityTemp"), "inner").drop("dstentityTemp")
-				.withColumnRenamed("scaleddstentity", "dstentityTransformed").drop("scaleddstentity").dropDuplicates(Array("dstentityTransformed"))
-		}
-		this.timeIntervalReverser = dfScaled.select("timeinterval","scaledtimeinterval").dropDuplicates(Array("scaledtimeinterval"))
-		dfScaled.drop("srcentityTemp","dstentityTemp","timeinterval")*/
-	}
-
-	private def rescale(df: DataFrame): DataFrame = {
-		val scalesMins = df.dtypes.map{case (colName, colType) =>
+	private def rescale(df: DataFrame, eType: String): DataFrame = {
+		val scalesMins = df.dtypes.filter(_._1!=eType).map{case (colName, colType) =>
 			println("Computing max and min for "+colName)
 			val minMax = df.agg(min(colName),max(colName)).head
 			colType match {
@@ -181,17 +160,20 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 			}
 		}
 		val scalesMinsB = spark.sparkContext.broadcast(scalesMins)
+		val eTypeB = spark.sparkContext.broadcast(eType)
 		println("Scaling...")
 		val scaledRDD = df.rdd.mapPartitions(iter => {
 			val scalesMins = scalesMinsB.value
-			iter.map(r => rescaleRow(r, scalesMins))
+			val eType = eTypeB.value
+			iter.map(r => rescaleRow(r, scalesMins, eType))
 		})
 		val dfScaled = df.sqlContext.createDataFrame(scaledRDD , df.schema)
 		df.columns.foldLeft(dfScaled){(prevDF, colName) => prevDF.withColumnRenamed(colName, "scaled"+colName).drop(colName)}
 	}
 
-	private def rescaleRow(row: Row, scalesMins: Array[(String, String, Double, Double)]):Row = {
-		val initSeq:Seq[Double] = Nil
+	private def rescaleRow(row: Row, scalesMins: Array[(String, String, Double, Double)], eType: String):Row = {
+		val eIndex = row.fieldIndex(eType)
+		val initSeq = Seq(row.getString(eIndex))
 		val newSeq = scalesMins.foldLeft(initSeq){case (prevSeq, (colName, colType, scale, minVal)) =>
 			val index = row.fieldIndex(colName)
 			val x = colType match{
@@ -238,24 +220,7 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	*/
 	def reverseResults(intrusions: DataFrame, eType: String = "srcentity"):DataFrame = {
 		println("Reversing the intrusions detected...")
-		val reverser = eType match{
-			case "srcentity" => this.srcEntityReverser
-			case "dstentity" => this.dstEntityReverser
-		}
-		val withentity = if(intrusions.columns.contains(eType)){
-			val intrusions2 = intrusions.withColumnRenamed(eType,eType+"Index")
-			intrusions2.join(reverser, intrusions2(eType+"Index") === reverser(eType+"Transformed"), "left")
-				.drop(eType+"Transformed").drop(eType+"Index").drop("scaled"+eType).distinct
-		}else{
-			intrusions.join(reverser, intrusions("scaled"+eType) === reverser(eType+"Transformed"), "left")
-				.drop("scaled"+eType).drop(eType+"Transformed").distinct
-		}
-		if(intrusions.columns.contains("timeinterval")){
-			withentity.drop("scaledtimeinterval")
-		}else{
-			withentity.join(timeIntervalReverser, withentity("scaledtimeinterval") === timeIntervalReverser("scaledtimeinterval"), "left")
-			.drop("scaledtimeinterval").distinct
-		}
+		intrusions.drop("scaled"+eType+"Index", "scaledtimeinterval")
 	}
 
 	/*
@@ -265,23 +230,5 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	private def frequentValues(df: DataFrame): Unit = {
 		df.columns.foreach(f => df.groupBy(f).count().orderBy(desc("count")).show())
 		df.columns.foreach(f => df.groupBy(f).count().orderBy(asc("count")).show())
-	}
-
-	def persistReversers():Unit = {
-		if(this.srcEntityReverser!=null){
-			this.srcEntityReverser.write.mode(SaveMode.Overwrite).parquet("srcEntityReverser.parquet")
-		}
-		if(this.dstEntityReverser!=null){
-			this.dstEntityReverser.write.mode(SaveMode.Overwrite).parquet("dstEntityReverser.parquet")
-		}
-		if(this.timeIntervalReverser!=null){
-			this.timeIntervalReverser.write.mode(SaveMode.Overwrite).parquet("timeIntervalReverser.parquet")
-		}
-	}
-
-	def loadReversers():Unit = {
-		this.srcEntityReverser = spark.read.parquet("srcEntityReverser.parquet")
-		this.dstEntityReverser = spark.read.parquet("dstEntityReverser.parquet")
-		this.timeIntervalReverser = spark.read.parquet("timeIntervalReverser.parquet")
 	}
 }

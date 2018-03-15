@@ -57,7 +57,6 @@ object MainIDSApp {
     finalFeaturesSrc.show()
     val w = finalFeaturesSrc.columns.foldLeft(finalFeaturesSrc){(prevdf, col) => rename(prevdf, col)}
     w.write.mode(SaveMode.Overwrite).parquet(conf.featuresFile)
-    fe.persistReversers()
     eval.persistIntrusions()
   }
 
@@ -68,7 +67,6 @@ object MainIDSApp {
   }
 
   private def readFeatures(spark: SparkSession, fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):DataFrame = {
-    fe.loadReversers()
     eval.loadIntrusions()
     spark.read.parquet(conf.featuresFile)
   }

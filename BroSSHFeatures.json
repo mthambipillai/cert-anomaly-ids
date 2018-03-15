@@ -1,0 +1,65 @@
+{
+  "name" : "BroSSH",
+  "features" : [ {
+    "name" : "auth_attempts",
+    "type" : "Int",
+    "doc" : "The number of authentication attemps we observed. There’s always at least one, since some servers might support no authentication at all. It’s important to note that not all of these are failures, since some servers require two-factor auth (e.g. password AND pubkey)",
+    "aggs" : ["sum","max","min","mean"]
+  }, {
+    "name" : "cipher_alg",
+    "type" : "String",
+    "doc" : "The encryption algorithm in use",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "compression_alg",
+    "type" : "String",
+    "doc" : "The compression algorithm in use",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "dsthost",
+    "type" : "Host",
+    "doc" : "The responder’s hostname (reverse dns of IP address).",
+    "aggs" : ["countdistinct"]
+  }, {
+    "name" : "dstip",
+    "type" : "String",
+    "doc" : "The responder’s IP address.",
+    "aggs" : ["countdistinct"]
+  }, {
+    "name" : "dstport",
+    "type" : "Int",
+    "doc" : "The responder’s port number.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "kex_alg",
+    "type" : "String",
+    "doc" : "The key exchange algorithm in use",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "mac_alg",
+    "type" : "String",
+    "doc" : "The signing (MAC) algorithm in use",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "srchost",
+    "type" : "Host",
+    "doc" : "The originator’s hostname (reverse dns of IP address).",
+    "aggs" : ["countdistinct"]
+  }, {
+    "name" : "srcip",
+    "type" : "String",
+    "doc" : "The originator’s IP address.",
+    "aggs" : ["countdistinct"]
+  }, {
+    "name" : "srcport",
+    "type" : "Int",
+    "doc" : "The originator’s port number.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "timestamp",
+    "type" : "Long",
+    "doc" : "Time when the SSH connection began.",
+    "aggs" : []
+  } ]
+}
+

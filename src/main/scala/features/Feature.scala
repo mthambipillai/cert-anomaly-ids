@@ -27,19 +27,18 @@ case class Feature(
 }
 
 object Feature{
-
-	private def countDistinctF(colName: String): Column = countDistinct(colName)
-	private def meanF(colName: String): Column = mean(colName)
-	private def sumF(colName: String): Column = sum(colName)
-	private def maxF(colName: String): Column = max(colName)
-	private def minF(colName: String): Column = min(colName)
+	val mostCommonValue = new MostCommonValueUDAF
+	
+	def mostCommonValueF(colName: String): Column = mostCommonValue(col(colName))
+	def countDistinctF(colName: String): Column = countDistinct(colName)
+	def meanF(colName: String): Column = mean(colName)
+	def sumF(colName: String): Column = sum(colName)
+	def maxF(colName: String): Column = max(colName)
+	def minF(colName: String): Column = min(colName)
 
 	val countDistinctOnly = List(countDistinctF(_))
 	val meanOnly = List(meanF(_))
 	val sumOnly = List(sumF(_))
-
-	val mostCommonValue = new MostCommonValueUDAF
-	private def mostCommonValueF(colName: String): Column = mostCommonValue(col(colName))
 
 	/*
 	Returns the standard list of features used for the IDS from BroConn.

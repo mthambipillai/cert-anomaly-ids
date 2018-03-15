@@ -2,6 +2,7 @@ package config
 import java.io.File
 import com.typesafe.config.{ Config, ConfigFactory }
 import features.Feature
+import features.FeaturesParser
 import scala.concurrent.duration._
 
 case class IDSConfig(
@@ -25,10 +26,8 @@ case class IDSConfig(
 object IDSConfig{
 	val parser = new scopt.OptionParser[IDSConfig]("ids") {
       head("ids", "1.0")
-      opt[String]('b', "brosource").action( (x, c) => x match {
-        case "BroSSH" => c.copy(features = Feature.getSSHFeatures())
-        case "BroConn" =>  c.copy(features = Feature.getConnFeatures()) 
-      }).text("Source of features from Bro. Default is BroSSH.").validate(x => 
+      opt[String]('b', "brosource").action( (x, c) =>
+        c.copy(features = FeaturesParser.parse(x)) ).text("Source of features from Bro. Default is BroSSH.").validate(x => 
         if(x=="BroSSH" || x=="BroConn") success else failure("Invalid parameter value"))
       opt[String]('e', "extractor").action( (x, c) =>
         c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
@@ -73,10 +72,7 @@ object IDSConfig{
 		val config = ConfigFactory.parseFile(new File(confFile))
 		val mode = config.getString("mode")
 		val filePath = config.getString("logspath")
-		val features = config.getString("features") match{
-			case "BroSSH" => Feature.getSSHFeatures()
-			case "BroConn" => Feature.getConnFeatures()
-		}
+		val features = FeaturesParser.parse(config.getString("features"))
 		val extractor = config.getString("extractor")
 		val interval = Duration(config.getString("aggregationtime"))
 		val trafficMode = config.getString("trafficmode")

@@ -47,6 +47,6 @@ class Inspector(spark: SparkSession){
 		eType: String, interval: Duration):Unit = {
 		val (entity, beginTimestamp, endTimeStamp) = extractInfo(anomaliesFile, nbAnomalies, rowNumber, eType, interval)
 		val logs = extractLogs(filePath, features, entity, eType, beginTimestamp, endTimeStamp, extractor)
-		logs.show()
+		logs.show(truncate = false)
 	}
 }

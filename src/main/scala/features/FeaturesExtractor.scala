@@ -173,7 +173,7 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 
 	private def rescaleRow(row: Row, scalesMins: Array[(String, String, Double, Double)], eType: String):Row = {
 		val eIndex = row.fieldIndex(eType)
-		val initSeq = Seq(row.getString(eIndex))
+		val initSeq:Seq[Any] = Seq(row.getString(eIndex))
 		val newSeq = scalesMins.foldLeft(initSeq){case (prevSeq, (colName, colType, scale, minVal)) =>
 			val index = row.fieldIndex(colName)
 			val x = colType match{

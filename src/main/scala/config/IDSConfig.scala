@@ -19,6 +19,7 @@ case class IDSConfig(
 	val topAnomalies: Int,
 	val anomaliesFile: String,
 	val anomalyIndex: Int,
+  val inspectionResults: String,
   //IsolationForest parameters
   val isolationForest: IsolationForestConfig
 )
@@ -48,7 +49,7 @@ object IDSConfig{
             c.copy(featuresFile = x) ).text("Parquet file to write the scaled features to.")
         )
       cmd("detect").action( (_, c) => c.copy(mode = "detect") ).
-        text("Read the computed features, detects anomalies and write them to a parquet file.").
+        text("Read the computed features, detects anomalies and write them to a CSV file.").
         children(
           opt[String]('f', "featuresfile").action( (x, c) =>
             c.copy(featuresFile = x) ).text("Parquet file to read the scaled features from."),
@@ -57,15 +58,23 @@ object IDSConfig{
           opt[Int]('n', "nbtopanomalies").action( (x, c) =>
             c.copy(topAnomalies = x) ).text("Number of top anomalies to store."),
           opt[String]('a', "anomaliesfile").action( (x, c) =>
-            c.copy(anomaliesFile = x) ).text("Parquet file to write the detected anomalies to.")
+            c.copy(anomaliesFile = x) ).text("CSV file to write the detected anomalies to.")
         )
       cmd("inspect").action( (_, c) => c.copy(mode = "inspect") ).
         text("Inspect the logs for a specific already detected anomaly.").
         children(
           opt[String]('a', "anomaliesfile").action( (x, c) =>
-            c.copy(anomaliesFile = x) ).text("Parquet file to read the detected anomalies from."),
+            c.copy(anomaliesFile = x) ).text("CSV file to read the detected anomalies from."),
           opt[Int]('i', "anomalyindex").action( (x, c) =>
             c.copy(anomalyIndex = x) ).text("Index in the anomalies file of the anomaly that will be inspected.")
+        )
+      cmd("inspectall").action( (_, c) => c.copy(mode = "inspectall") ).
+        text("Inspects all the logs for every anomaly detected.").
+        children(
+          opt[String]('a', "anomaliesfile").action( (x, c) =>
+            c.copy(anomaliesFile = x) ).text("CSV file to read the detected anomalies from."),
+          opt[String]('r', "resultsfile").action( (x, c) =>
+            c.copy(inspectionResults = x) ).text("CSV file to write the results of the inspection.")
         )
     }
 	def loadConf(args: Array[String], confFile: String):IDSConfig = {
@@ -82,9 +91,10 @@ object IDSConfig{
 		val topAnomalies = config.getInt("nbtopanomalies")
 		val anomaliesFile = config.getString("anomaliesfile")
 		val anomalyIndex = config.getInt("anomalyindex")
+    val inspectionResults = config.getString("resultsfile")
     val isolationForest = IsolationForestConfig.load(config)
 		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode,
-			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex, isolationForest)
+			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex, inspectionResults, isolationForest)
 
 		parser.parse(args, fromFile).getOrElse{
 			System.exit(1)

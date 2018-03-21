@@ -21,9 +21,9 @@ object MainIDSApp {
     spark.sparkContext.setLogLevel("ERROR")
    
     val eval = new Evaluator()
-    def inject(df: DataFrame):DataFrame = eval
-      .injectIntrusions(df, IntrusionKind.allKinds.map(ik => (ik,4)), 1496361600902L, 1496447999253L, conf.interval)
-    val fe = new FeatureExtractor(spark, inject)
+    //def inject(df: DataFrame):DataFrame = eval
+      //.injectIntrusions(df, IntrusionKind.allKinds.map(ik => (ik,4)), 1496361600902L, 1496447999253L, conf.interval)
+    val fe = new FeatureExtractor(spark, df => df)
 
     conf.mode match{
       case "extract" => {
@@ -43,6 +43,11 @@ object MainIDSApp {
         ins.inspect(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, conf.topAnomalies,
           conf.anomalyIndex,  conf.trafficMode, conf.interval)
       }
+      case "inspectall" => {
+        val ins = new Inspector(spark)
+        ins.inspectAll(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, 
+          conf.trafficMode, conf.interval, conf.inspectionResults)
+      }
       case _ => println("Invalid command.")
     }
 
@@ -54,10 +59,10 @@ object MainIDSApp {
   private def writeFeatures(fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):Unit = {
     val finalFeatures = fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval, conf.trafficMode, conf.scaleMode)
     val finalFeaturesSrc = finalFeatures.head
-    finalFeaturesSrc.show()
+    //finalFeaturesSrc.show()
     val w = finalFeaturesSrc.columns.foldLeft(finalFeaturesSrc){(prevdf, col) => rename(prevdf, col)}
     w.write.mode(SaveMode.Overwrite).parquet(conf.featuresFile)
-    eval.persistIntrusions()
+    //eval.persistIntrusions()
   }
 
   private def rename(df: DataFrame, col: String):DataFrame = {
@@ -67,7 +72,7 @@ object MainIDSApp {
   }
 
   private def readFeatures(spark: SparkSession, fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):DataFrame = {
-    eval.loadIntrusions()
+    //eval.loadIntrusions()
     spark.read.parquet(conf.featuresFile)
   }
 }

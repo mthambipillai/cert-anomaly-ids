@@ -7,6 +7,8 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.SaveMode
 import java.io._
+import au.com.bytecode.opencsv.CSVWriter
+import scala.collection.mutable.ListBuffer
 
 class Evaluator() extends Serializable{
 	private val r = new Random(System.currentTimeMillis())
@@ -31,7 +33,13 @@ class Evaluator() extends Serializable{
 		val newCols = eType::("timeinterval"::otherCols)
 		val top = distDetected.sort(desc("score")).limit(nbTop).select(newCols.head, newCols.tail:_*)
 		println("Writing top "+nbTop+" intrusions detected to "+destFile+".")
-		top.write.mode(SaveMode.Overwrite).parquet(destFile)
+		top.coalesce(1).write.format("com.databricks.spark.csv").option("header", "true").save(destFile)
+
+		val nbTotal = intrusions.size
+		if(nbTotal==0){
+			println("No known intrusions to check.")
+			return
+		}
 		val entityIndex = distDetected.columns.indexOf(eType)
 		val timeIndex = distDetected.columns.indexOf("timeinterval")
 		val toCheck = distDetected.collect.zipWithIndex
@@ -41,7 +49,6 @@ class Evaluator() extends Serializable{
 			(res::results, newCheck)
 		}
 		val nbDetected = results.filter(_==true).size
-		val nbTotal = intrusions.size
 		val recall = 100.0*(nbDetected.toDouble/nbTotal.toDouble)
 		println("Number of known intrusions detected (Recall) : "+nbDetected+"/"+nbTotal+" = "+recall+"%\n")
 	}

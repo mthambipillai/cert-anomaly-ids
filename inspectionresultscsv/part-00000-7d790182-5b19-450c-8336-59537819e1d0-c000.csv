@@ -1,0 +1,50 @@
+id,timestamp,auth_attempts,auth_success,cipher_alg,client,server,version,direction,dsthost,dstip,dstport,srchost,srcip
+0,02.06-11:31:34:290,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus064.cern.ch.,188.184.88.20,22,nafhh-atlas05.desy.de.,131.169.168.61
+0,02.06-11:31:34:290,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus064.cern.ch.,188.184.88.20,22,nafhh-atlas05.desy.de.,131.169.168.61
+0,02.06-11:31:34:290,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus064.cern.ch.,188.184.88.20,22,nafhh-atlas05.desy.de.,131.169.168.61
+1,02.06-13:40:21:463,1,false,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus009.cern.ch.,188.184.88.77,22,dhcp-24-53-249-16.cable.user.start.ca.,24.53.249.16
+1,02.06-13:40:21:463,1,false,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus009.cern.ch.,188.184.88.77,22,dhcp-24-53-249-16.cable.user.start.ca.,24.53.249.16
+1,02.06-13:40:21:463,1,false,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus009.cern.ch.,188.184.88.77,22,dhcp-24-53-249-16.cable.user.start.ca.,24.53.249.16
+1,02.06-13:40:59:474,1,true,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus058.cern.ch.,188.184.90.69,22,dhcp-24-53-249-16.cable.user.start.ca.,24.53.249.16
+1,02.06-13:40:59:474,1,true,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus058.cern.ch.,188.184.90.69,22,dhcp-24-53-249-16.cable.user.start.ca.,24.53.249.16
+1,02.06-13:40:59:474,1,true,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus058.cern.ch.,188.184.90.69,22,dhcp-24-53-249-16.cable.user.start.ca.,24.53.249.16
+2,02.06-16:29:40:889,4,false,aes128-ctr,SSH-2.0-sshlib-0.1,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus042.cern.ch.,188.184.88.150,22,x4e31cffc.dyn.telefonica.de.,78.49.207.252
+2,02.06-16:29:40:889,4,false,aes128-ctr,SSH-2.0-sshlib-0.1,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus042.cern.ch.,188.184.88.150,22,x4e31cffc.dyn.telefonica.de.,78.49.207.252
+2,02.06-16:29:40:889,4,false,aes128-ctr,SSH-2.0-sshlib-0.1,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus042.cern.ch.,188.184.88.150,22,x4e31cffc.dyn.telefonica.de.,78.49.207.252
+3,02.06-12:43:53:969,,,aes128-ctr,SSH-2.0-libssh2_1.4.3,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus059.cern.ch.,188.184.95.204,22,edwardsnowden1.torservers.net.,109.163.234.8
+3,02.06-12:43:53:969,,,aes128-ctr,SSH-2.0-libssh2_1.4.3,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus059.cern.ch.,188.184.95.204,22,edwardsnowden1.torservers.net.,109.163.234.8
+3,02.06-12:43:53:969,,,aes128-ctr,SSH-2.0-libssh2_1.4.3,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus059.cern.ch.,188.184.95.204,22,edwardsnowden1.torservers.net.,109.163.234.8
+4,02.06-10:01:10:103,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,OUTBOUND,lorienmaster.irb.hr.,161.53.131.101,22,lxplus010.cern.ch.,188.184.89.245
+4,02.06-10:01:10:103,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,OUTBOUND,lorienmaster.irb.hr.,161.53.131.101,22,lxplus010.cern.ch.,188.184.89.245
+4,02.06-10:01:10:103,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,OUTBOUND,lorienmaster.irb.hr.,161.53.131.101,22,lxplus010.cern.ch.,188.184.89.245
+4,02.06-10:11:25:188,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,OUTBOUND,lorienmaster.irb.hr.,161.53.131.101,22,lxplus010.cern.ch.,188.184.89.245
+4,02.06-10:11:25:188,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,OUTBOUND,lorienmaster.irb.hr.,161.53.131.101,22,lxplus010.cern.ch.,188.184.89.245
+4,02.06-10:11:25:188,2,true,aes128-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-OpenSSH_5.3,2,OUTBOUND,lorienmaster.irb.hr.,161.53.131.101,22,lxplus010.cern.ch.,188.184.89.245
+4,02.06-10:32:03:678,1,true,aes256-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-libssh-0.7.0,2,OUTBOUND,NOT_RESOLVED,192.30.253.113,22,lxplus010.cern.ch.,188.184.89.245
+4,02.06-10:32:03:678,1,true,aes256-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-libssh-0.7.0,2,OUTBOUND,NOT_RESOLVED,192.30.253.113,22,lxplus010.cern.ch.,188.184.89.245
+4,02.06-10:32:03:678,1,true,aes256-ctr,SSH-2.0-OpenSSH_5.3,SSH-2.0-libssh-0.7.0,2,OUTBOUND,NOT_RESOLVED,192.30.253.113,22,lxplus010.cern.ch.,188.184.89.245
+5,02.06-16:58:56:432,2,true,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus059.cern.ch.,188.184.95.204,22,88-111-194-118.dynamic.dsl.as9105.com.,88.111.194.118
+5,02.06-16:58:56:432,2,true,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus059.cern.ch.,188.184.95.204,22,88-111-194-118.dynamic.dsl.as9105.com.,88.111.194.118
+5,02.06-16:58:56:432,2,true,aes128-ctr,SSH-2.0-OpenSSH_6.9,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus059.cern.ch.,188.184.95.204,22,88-111-194-118.dynamic.dsl.as9105.com.,88.111.194.118
+6,02.06-15:36:25:942,4,false,aes128-ctr,SSH-2.0-sshlib-0.1,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus068.cern.ch.,188.184.95.251,22,NOT_RESOLVED,1.232.166.162
+6,02.06-15:36:25:942,4,false,aes128-ctr,SSH-2.0-sshlib-0.1,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus068.cern.ch.,188.184.95.251,22,NOT_RESOLVED,1.232.166.162
+6,02.06-15:36:25:942,4,false,aes128-ctr,SSH-2.0-sshlib-0.1,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus068.cern.ch.,188.184.95.251,22,NOT_RESOLVED,1.232.166.162
+6,02.06-15:36:25:942,4,false,aes128-ctr,SSH-2.0-sshlib-0.1,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus068.cern.ch.,188.184.95.251,22,NOT_RESOLVED,1.232.166.162
+7,02.06-14:43:23:172,2,true,aes128-ctr,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus045.cern.ch.,188.184.95.131,22,46-253-189-210.dynamic.monzoon.net.,46.253.189.210
+7,02.06-14:43:23:172,2,true,aes128-ctr,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus045.cern.ch.,188.184.95.131,22,46-253-189-210.dynamic.monzoon.net.,46.253.189.210
+7,02.06-14:43:23:172,2,true,aes128-ctr,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus045.cern.ch.,188.184.95.131,22,46-253-189-210.dynamic.monzoon.net.,46.253.189.210
+7,02.06-14:43:56:868,,,aes128-ctr,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus084.cern.ch.,188.184.91.147,22,46-253-189-210.dynamic.monzoon.net.,46.253.189.210
+7,02.06-14:43:56:868,,,aes128-ctr,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus084.cern.ch.,188.184.91.147,22,46-253-189-210.dynamic.monzoon.net.,46.253.189.210
+7,02.06-14:43:56:868,,,aes128-ctr,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_5.3,2,INBOUND,lxplus084.cern.ch.,188.184.91.147,22,46-253-189-210.dynamic.monzoon.net.,46.253.189.210
+8,02.06-09:27:48:147,1,true,chacha20-poly1305@openssh.com,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,2,INBOUND,oogitlabprod-684b2749ee.cern.ch.,188.184.64.161,7999,aduedder2.physik.uni-mainz.de.,134.93.128.205
+8,02.06-09:27:48:147,1,true,chacha20-poly1305@openssh.com,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,2,INBOUND,oogitlabprod-684b2749ee.cern.ch.,188.184.64.161,7999,aduedder2.physik.uni-mainz.de.,134.93.128.205
+8,02.06-09:27:48:147,1,true,chacha20-poly1305@openssh.com,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.2,2,INBOUND,oogitlabprod-684b2749ee.cern.ch.,188.184.64.161,7999,aduedder2.physik.uni-mainz.de.,134.93.128.205
+9,02.06-17:23:21:905,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus038.cern.ch.,188.184.94.89,22,shuarworry.com.,170.178.172.178
+9,02.06-17:23:21:905,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus038.cern.ch.,188.184.94.89,22,shuarworry.com.,170.178.172.178
+9,02.06-17:23:21:905,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus038.cern.ch.,188.184.94.89,22,shuarworry.com.,170.178.172.178
+9,02.06-17:43:39:413,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus062.cern.ch.,188.184.91.9,22,shuarworry.com.,170.178.172.178
+9,02.06-17:43:39:413,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus062.cern.ch.,188.184.91.9,22,shuarworry.com.,170.178.172.178
+9,02.06-17:43:39:413,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus062.cern.ch.,188.184.91.9,22,shuarworry.com.,170.178.172.178
+9,02.06-17:43:40:312,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus020.cern.ch.,188.184.93.156,22,shuarworry.com.,170.178.172.178
+9,02.06-17:43:40:312,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus020.cern.ch.,188.184.93.156,22,shuarworry.com.,170.178.172.178
+9,02.06-17:43:40:312,,,,,SSH-2.0-OpenSSH_5.3,0,INBOUND,lxplus020.cern.ch.,188.184.93.156,22,shuarworry.com.,170.178.172.178

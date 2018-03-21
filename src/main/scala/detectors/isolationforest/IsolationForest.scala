@@ -21,6 +21,7 @@ class IsolationForest(spark: SparkSession, data: DataFrame, nbTrees: Int, trainS
 	}
 	private val c:Double = {//average path length as given in section 2 of (1)
 		val size = data.count()
+		println("nb samples : "+size)
 		val h = log(size-1)+0.5772156649
 		val res = 2*h - (2*(size-1)/size)
 		println("c value for IsolationForest : "+res)

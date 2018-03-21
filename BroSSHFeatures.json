@@ -2,64 +2,100 @@
   "name" : "BroSSH",
   "features" : [ {
     "name" : "auth_attempts",
+    "parent" : null,
     "type" : "Int",
     "doc" : "The number of authentication attemps we observed. There’s always at least one, since some servers might support no authentication at all. It’s important to note that not all of these are failures, since some servers require two-factor auth (e.g. password AND pubkey)",
     "aggs" : ["sum","max","min","mean"]
   }, {
+    "name" : "auth_success",
+    "parent" : null,
+    "type" : "Boolean",
+    "doc" : "Authentication result (T=success, F=failure, unset=unknown)",
+    "aggs" : ["mostcommon","mean"]
+  }, {
     "name" : "cipher_alg",
+    "parent" : null,
     "type" : "String",
     "doc" : "The encryption algorithm in use",
     "aggs" : ["mostcommon","countdistinct"]
   }, {
-    "name" : "compression_alg",
+    "name" : "client",
+    "parent" : null,
     "type" : "String",
-    "doc" : "The compression algorithm in use",
-    "aggs" : ["mostcommon","countdistinct"]
+    "doc" : "The client’s version string",
+    "aggs" : ["mostcommon"]
+  }, {
+    "name" : "server",
+    "parent" : null,
+    "type" : "String",
+    "doc" : "The server’s version string",
+    "aggs" : ["mostcommon"]
+  }, {
+    "name" : "version",
+    "parent" : null,
+    "type" : "Int",
+    "doc" : "SSH major version (1 or 2)",
+    "aggs" : ["mostcommon"]
+  }, {
+    "name" : "direction",
+    "parent" : null,
+    "type" : "String",
+    "doc" : "Direction of the connection. If the client was a local host logging into an external host, this would be OUTBOUND. INBOUND would be set for the opposite situation.",
+    "aggs" : ["mostcommon","mean"]
   }, {
     "name" : "dsthost",
+    "parent" : null,
     "type" : "Host",
     "doc" : "The responder’s hostname (reverse dns of IP address).",
     "aggs" : ["countdistinct"]
   }, {
     "name" : "dstip",
+    "parent" : null,
     "type" : "String",
     "doc" : "The responder’s IP address.",
     "aggs" : ["countdistinct"]
   }, {
     "name" : "dstport",
+    "parent" : null,
     "type" : "Int",
     "doc" : "The responder’s port number.",
     "aggs" : ["mostcommon","countdistinct"]
   }, {
-    "name" : "kex_alg",
-    "type" : "String",
-    "doc" : "The key exchange algorithm in use",
-    "aggs" : ["mostcommon","countdistinct"]
-  }, {
-    "name" : "mac_alg",
-    "type" : "String",
-    "doc" : "The signing (MAC) algorithm in use",
-    "aggs" : ["mostcommon","countdistinct"]
-  }, {
     "name" : "srchost",
+    "parent" : null,
     "type" : "Host",
     "doc" : "The originator’s hostname (reverse dns of IP address).",
     "aggs" : ["countdistinct"]
   }, {
     "name" : "srcip",
+    "parent" : null,
     "type" : "String",
     "doc" : "The originator’s IP address.",
     "aggs" : ["countdistinct"]
   }, {
     "name" : "srcport",
+    "parent" : null,
     "type" : "Int",
     "doc" : "The originator’s port number.",
     "aggs" : ["mostcommon","countdistinct"]
   }, {
     "name" : "timestamp",
+    "parent" : null,
     "type" : "Long",
     "doc" : "Time when the SSH connection began.",
     "aggs" : []
-  } ]
+  }, {
+    "name" : "day",
+    "parent" : "timestamp",
+    "type" : "Day",
+    "doc" : "Day of the week derived from timestamp",
+    "aggs" : ["mostcommon"]
+  }, {
+    "name" : "hour",
+    "parent" : "timestamp",
+    "type" : "Hour",
+    "doc" : "Hour of the day derived from the timestamp",
+    "aggs" : ["mostcommon"]
+  }]
 }
 

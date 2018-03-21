@@ -3,9 +3,12 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.Column
 import org.apache.spark.ml.feature.StringIndexer
-
+import java.util.Date
+import java.text.SimpleDateFormat
 import java.math.BigInteger
 import java.net.{UnknownHostException, InetAddress}
+import java.util.Calendar;  
+import java.util.TimeZone;
 
 /*
 Each basic 'Feature' is taken from a field in the bro_conn logs and must
@@ -14,6 +17,7 @@ be used later by machine learning techniques).
 */
 case class Feature(
 	val name: String,
+	val parent: Option[String],
 	val description: String,
 	private val parseColAux: (DataFrame,String) => DataFrame,
 	private val aggregateAux: List[String => Column]
@@ -40,48 +44,16 @@ object Feature{
 	val meanOnly = List(meanF(_))
 	val sumOnly = List(sumF(_))
 
+	private val boolToDouble = udf((x: Boolean) => {
+		val r = if(x==true) 1.0 else 0.0
+		if(r==null) 0.0 else r
+	})
 	/*
-	Returns the standard list of features used for the IDS from BroConn.
+	Fills the column 'null' values with 0 and converts to Double.
 	*/
-	def getConnFeatures(): List[Feature] = {
-		//TODO : read this from some conf file?
-		List(Feature("timestamp","Timestamp",parseLongCol,Nil),
-			Feature("proto","Transport layer protocol",parseStringCol,countDistinctOnly),
-			Feature("service","Application layer protocol",parseStringCol,countDistinctOnly),
-			Feature("duration","Duration of the connection",parseIntCol,meanOnly),
-			Feature("orig_bytes","Number of bytes from src",parseIntCol,sumOnly),
-			Feature("resp_bytes","Number of bytes from dst",parseIntCol,sumOnly),
-			Feature("conn_state","Connection state at the end",parseStringCol,countDistinctOnly),
-			Feature("srcip","Source IP address",parseStringCol,countDistinctOnly),
-			Feature("dstip","Destination IP address",parseStringCol,countDistinctOnly),
-			Feature("srcport","Source port",parseIntCol,countDistinctOnly),
-			Feature("dstport","Destination port",parseIntCol,countDistinctOnly),
-			Feature("srchost","DNS host resolution of the src ip",parseHostCol,countDistinctOnly),
-			Feature("dsthost","DNS host resolution of the dst ip",parseHostCol,countDistinctOnly)
-			//Feature("srcip_country","Country from GeoIP resolution of the src ip",parseStringCol,countDistinctOnly),
-			//Feature("srcip_org","Organization from GeoIP resolution of the src ip",parseStringCol,countDistinctOnly),
-			//Feature("dstip_country","Country from GeoIP resolution of the dst ip",parseStringCol,countDistinctOnly),
-			//Feature("dstip_org","Organization from GeoIP resolution of the dst ip",parseStringCol,countDistinctOnly)
-		)
-	}
-
-	/*
-	Returns the standard list of features used for the IDS from BroSSH.
-	*/
-	def getSSHFeatures(): List[Feature] = {
-		//TODO : read this from some conf file?
-		List(Feature("timestamp","Timestamp",parseLongCol,Nil),
-			Feature("auth_attempts","Number of authentication attempts",parseIntCol,List(sumF, maxF, minF, meanF)),
-			Feature("cipher_alg","Cipher algorithm used",parseStringCol,List(mostCommonValueF, countDistinctF)),
-			Feature("compression_alg","Compression algorithm used",parseStringCol,List(mostCommonValueF, countDistinctF)),
-			Feature("mac_alg","MAC algorithm used",parseStringCol,List(mostCommonValueF, countDistinctF)),
-			Feature("kex_alg","Key exchange algorithm used",parseStringCol,List(mostCommonValueF, countDistinctF)),
-			Feature("srcport","Source port",parseIntCol,countDistinctOnly),
-			Feature("dstport","Destination port",parseIntCol,List(mostCommonValueF, countDistinctF)),
-			Feature("srchost","DNS host resolution of the src ip",parseHostCol,countDistinctOnly),
-			Feature("dsthost","DNS host resolution of the dst ip",parseHostCol,countDistinctOnly),
-			Feature("srcip","Source IP address",parseStringCol,countDistinctOnly),
-			Feature("dstip","Destination IP address",parseStringCol,countDistinctOnly))
+	def parseBooleanCol(df: DataFrame, columnName: String): DataFrame = {
+		val df2 = df.withColumn(columnName+"2", boolToDouble(df(columnName))).drop(columnName).withColumnRenamed(columnName+"2",columnName)
+		df2.na.fill(0.0, columnName :: Nil)
 	}
 
 	private val intToDouble = udf((x: Int) => x.toDouble)
@@ -146,5 +118,20 @@ object Feature{
 		val df2 = df.na.fill("NOT_RESOLVED", columnName :: Nil)
 		val indexer = new StringIndexer().setInputCol(columnName).setOutputCol(columnName+"Index").setHandleInvalid("keep")
 		indexer.fit(df2).transform(df2)
+	}
+
+	private val hourFormatter = new SimpleDateFormat("HH");
+	private def toHour(df: SimpleDateFormat) = udf((t: Long) => df.format(new Date(t)).toDouble)
+	def parseHourCol(df: DataFrame, columnName: String): DataFrame = {
+		df.withColumn("hour", toHour(hourFormatter)(df("timestamp")))
+	}
+
+	private val cal = Calendar.getInstance(TimeZone.getDefault());
+	private def toDay(cal: Calendar) = udf((t: Long) => {
+		cal.setTimeInMillis(t)
+		cal.get(Calendar.DAY_OF_WEEK).toDouble
+	})
+	def parseDayCol(df: DataFrame, columnName: String): DataFrame = {
+		df.withColumn("day", toDay(cal)(df("timestamp")))
 	}
 }

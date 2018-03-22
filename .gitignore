@@ -4,3 +4,4 @@ target/*
 *.keytab
 metastore_db/*
 lib_managed/*
+knownips.txt

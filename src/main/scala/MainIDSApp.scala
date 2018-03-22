@@ -32,7 +32,7 @@ object MainIDSApp {
       case "detect" => {
         val features = readFeatures(spark, fe, eval, conf)
         features.cache()
-        val iForest = new IsolationForest(spark, features, conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
+        val iForest = new IsolationForest(spark, features, features.count, conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
         val anomalies = iForest.detect(conf.threshold)
         features.unpersist()
         val resolvedAnomalies = fe.reverseResults(anomalies)

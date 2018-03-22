@@ -9,6 +9,8 @@ import java.text.SimpleDateFormat
 import org.apache.spark.sql.Column
 import scala.io.Source
 import org.apache.spark.sql.Row
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.types._
 
 class Inspector(spark: SparkSession){
 	private val dateFormatter = new SimpleDateFormat("dd.MM'-'HH:mm:ss:SSS");
@@ -39,14 +41,20 @@ class Inspector(spark: SparkSession){
 		println("Loading anomalies...")
 		val anoms = loadAnoms(anomaliesFile)
 		println("Fetching matching logs...")
-		val dfs = anoms.zipWithIndex.map{case (row,id) =>
+		val allLogs = anoms.zipWithIndex.map{case (row,id) =>
 			val sqlStmt = getStmt(row, features, interval, eType, ee)
 			val logs = getLogs(sqlStmt)
 			val withID = logs.withColumn("id", lit(id))
 			val newCols = "id"::(logs.columns.toList.dropRight(1))
 			withID.select(newCols.head, newCols.tail:_*)
 		}
-		val all = dfs.tail.foldLeft(dfs.head)(_.union(_))
+		val tagField = StructField("anomalytag", StringType, true)
+		val commentField = StructField("comments", StringType, true)
+		val newSchema = StructType(allLogs.head.schema++Seq(tagField, commentField))
+		val allRows = allLogs.flatMap(df => flag(df, Rule.BroSSHRules, newSchema))
+		val rdd = spark.sparkContext.parallelize(allRows)
+		val all = spark.createDataFrame(rdd, newSchema)
+		//val all = dfs.tail.foldLeft(dfs.head)(_.union(_))
 		println("Writing results to "+resultsFile+"...")
 		all.coalesce(1).write.format("com.databricks.spark.csv").option("header", "true").save(resultsFile)
 	}
@@ -79,5 +87,14 @@ class Inspector(spark: SparkSession){
 			.drop("timestamp").withColumnRenamed("timestamp2", "timestamp")
 		val newCols = "timestamp"::df2.columns.toList.dropRight(1)
 		df2.select(newCols.head, newCols.tail:_*)
+	}
+
+	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType):List[Row] = {
+		val tagged = logs.withColumn("anomalytag",lit("")).withColumn("comments",lit(""))
+		val nbCols = tagged.columns.size
+		val tagIndex = nbCols-2
+		val commentIndex = nbCols-1
+		val rows = tagged.collect.toList
+		rules.foldLeft(rows){case (rows, rule) => rule.flag(rows, schema, tagIndex, commentIndex)}
 	}
 }

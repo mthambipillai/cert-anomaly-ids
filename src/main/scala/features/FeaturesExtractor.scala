@@ -3,7 +3,6 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.Row
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types._
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.feature.Normalizer
 import org.apache.spark.ml.feature.MinMaxScaler

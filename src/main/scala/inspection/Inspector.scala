@@ -51,10 +51,16 @@ class Inspector(spark: SparkSession){
 		val tagField = StructField("anomalytag", StringType, true)
 		val commentField = StructField("comments", StringType, true)
 		val newSchema = StructType(allLogs.head.schema++Seq(tagField, commentField))
-		val allRows = allLogs.flatMap(df => flag(df, Rule.BroSSHRules, newSchema))
-		val rdd = spark.sparkContext.parallelize(allRows)
+		val (tags, allRows) = allLogs.map(df => flag(df, Rule.BroSSHRules, newSchema)).toList.unzip
+		val nbPositives = tags.filter(_==true).size
+		val nbAll = tags.size
+		val precision = (nbPositives.toDouble/nbAll.toDouble)*100.0
+		println("Number of detected anomalies tagged as true anomalies (Precision) : "+
+			nbPositives+"/"+nbAll+" = "+precision+"%")
+		println("The system was unable to tag the remaining "+(nbAll - nbPositives)+" detected anomalies. "+
+			"Tag them manually in "+resultsFile+" to obtain the exact precision measurement.\n")
+		val rdd = spark.sparkContext.parallelize(allRows.flatten)
 		val all = spark.createDataFrame(rdd, newSchema)
-		//val all = dfs.tail.foldLeft(dfs.head)(_.union(_))
 		println("Writing results to "+resultsFile+"...")
 		all.coalesce(1).write.format("com.databricks.spark.csv").option("header", "true").save(resultsFile)
 	}
@@ -89,12 +95,15 @@ class Inspector(spark: SparkSession){
 		df2.select(newCols.head, newCols.tail:_*)
 	}
 
-	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType):List[Row] = {
+	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType):(Boolean, List[Row]) = {
 		val tagged = logs.withColumn("anomalytag",lit("")).withColumn("comments",lit(""))
 		val nbCols = tagged.columns.size
 		val tagIndex = nbCols-2
 		val commentIndex = nbCols-1
 		val rows = tagged.collect.toList
-		rules.foldLeft(rows){case (rows, rule) => rule.flag(rows, schema, tagIndex, commentIndex)}
+		rules.foldLeft((false, rows)){case ((tag, rows), rule) => 
+			val (nextTag, nextRows) = rule.flag(rows, schema, tagIndex, commentIndex)
+			(tag||nextTag, nextRows)
+		}
 	}
 }

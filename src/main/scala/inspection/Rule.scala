@@ -9,18 +9,19 @@ case class Rule(
 	private val flagAux: (StructType, List[Row]) => (Boolean, List[String])
 ){
 
-	def flag(rows: List[Row], schema: StructType, tagIndex: Int, commentIndex: Int):List[Row] = {
+	def flag(rows: List[Row], schema: StructType, tagIndex: Int, commentIndex: Int):(Boolean, List[Row]) = {
 		val firstSeq = rows(0).toSeq
 		val tag = firstSeq(tagIndex).asInstanceOf[String]
 		val (isAnomaly, comments) = flagAux(schema, rows)
 		val newTag = if(isAnomaly) "yes" else {if(tag=="") "?" else tag}
 		val firstComment = firstSeq(commentIndex)
 		val newFirstRow = Row.fromSeq(firstSeq.dropRight(2) ++ Seq(newTag, firstComment))
-		(newFirstRow::rows.tail).zip(comments).map{case (row, comment) =>
+		val newRows = (newFirstRow::rows.tail).zip(comments).map{case (row, comment) =>
 			val prevComment = row.getString(commentIndex)
 			val newComment = List(prevComment, comment).filter(_!="").mkString(" + ")
 			Row.fromSeq(row.toSeq.dropRight(1) :+ newComment)
 		}
+		(isAnomaly, newRows)
 	}
 }
 

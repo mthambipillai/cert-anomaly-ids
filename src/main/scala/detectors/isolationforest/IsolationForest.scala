@@ -10,7 +10,7 @@ import detectors.Detector
 /*
 This detector implements the algorithm described in "Liu, Ting and Zhou. Isolation Forest" (1).
 */
-class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Int, nbTrees: Int, trainSize: Int) extends Detector with Serializable{
+class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTrees: Int, trainSize: Int) extends Detector with Serializable{
 	private val limit = ceil(log(trainSize)/log(2.0)).toInt
 	private val schema = data.dtypes.zipWithIndex.flatMap{case ((colName, colType),index) => 
 		if(colName=="srcentity" || colName=="dstentity" || colName=="timeinterval"){
@@ -21,8 +21,8 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Int, nbTre
 	}
 	private val c:Double = {//average path length as given in section 2 of (1)
 		println("nb samples : "+dataSize)
-		val h = log(size-1)+0.5772156649
-		val res = 2*h - (2*(size-1)/size)
+		val h = log(dataSize-1)+0.5772156649
+		val res = 2*h - (2*(dataSize-1)/dataSize)
 		println("c value for IsolationForest : "+res)
 		res
 	}

@@ -89,5 +89,48 @@ object Rule{
 		}
 	})
 
-	val BroSSHRules = List(nbAttemptsSSH, dstPortSSH, versionSSH, unusualDstHostSSH, maliciousSrcIP)
+	val unusualClientSSH = Rule((schema, rows) => {
+		val clientIndex = schema.fieldIndex("client")
+		val filename = "clientstats.txt"
+		val clients = Source.fromFile(filename).getLines.toList
+		val tags = rows.map(r => {
+			val client = if(r.isNullAt(clientIndex)) "null" else r.getString(clientIndex)
+			val comment = if(!clients.contains(client)) "unusual client" else ""
+			(!clients.contains(client), List(comment))
+		})
+		tags.tail.foldLeft(tags.head){case ((tag1,comment1),(tag2, comment2)) => 
+			(tag1 || tag2, comment1:::comment2)
+		}
+	})
+
+	val unusualServerSSH = Rule((schema, rows) => {
+		val serverIndex = schema.fieldIndex("server")
+		val filename = "serverstats.txt"
+		val servers = Source.fromFile(filename).getLines.toList
+		val tags = rows.map(r => {
+			val server = if(r.isNullAt(serverIndex)) "null" else r.getString(serverIndex)
+			val comment = if(!servers.contains(server)) "unusual server" else ""
+			(!servers.contains(server), List(comment))
+		})
+		tags.tail.foldLeft(tags.head){case ((tag1,comment1),(tag2, comment2)) => 
+			(tag1 || tag2, comment1:::comment2)
+		}
+	})
+
+	val unusualCipherSSH = Rule((schema, rows) => {
+		val cipherIndex = schema.fieldIndex("cipher_alg")
+		val filename = "cipher_algstats.txt"
+		val ciphers = Source.fromFile(filename).getLines.toList
+		val tags = rows.map(r => {
+			val cipher = if(r.isNullAt(cipherIndex)) "null" else r.getString(cipherIndex)
+			val comment = if(!ciphers.contains(cipher)) "unusual cipher" else ""
+			(!ciphers.contains(cipher), List(comment))
+		})
+		tags.tail.foldLeft(tags.head){case ((tag1,comment1),(tag2, comment2)) => 
+			(tag1 || tag2, comment1:::comment2)
+		}
+	})
+
+	val BroSSHRules = List(nbAttemptsSSH, dstPortSSH, versionSSH,
+		unusualDstHostSSH, maliciousSrcIP, unusualClientSSH, unusualServerSSH, unusualCipherSSH)
 }

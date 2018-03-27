@@ -9,18 +9,19 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.SparkSession
 
-class KMeansDetector(spark: SparkSession, data: DataFrame) extends Detector{
+class KMeansDetector(spark: SparkSession, data: DataFrame,
+	trainRatio: Double, minNbK: Int, maxNbK: Int, elbowRatio: Double) extends Detector{
 
 	override def detect(threshold: Double = 0.5):DataFrame = {
 		val featuresCols = data.columns.filter(_.contains("scaled"))
 		val assembler = new VectorAssembler().setInputCols(featuresCols).setOutputCol("features")
 		val assembled = assembler.transform(data)
-		val km = new KMeans().setK(4).setSeed(1L).setFeaturesCol("features").setPredictionCol("cluster")
-		val model = getOptimizedModel(km, assembled.sample(true, 0.1))
+		val km = new KMeans().setK(minNbK).setSeed(1L).setFeaturesCol("features").setPredictionCol("cluster")
+		val model = getOptimizedModel(km, assembled.sample(true, trainRatio))
 		val withClusters = model.transform(assembled).drop("features")
 		val sizes = model.summary.clusterSizes.toList
 		val withScores = mapToScores(withClusters, sizes)
-		withScores.filter(withScores("score").leq(lit(1-threshold)))
+		withScores.filter(withScores("score").geq(lit(threshold)))
 	}
 
 	private def mapToScores(df: DataFrame, sizes: List[Long]):DataFrame = {
@@ -30,7 +31,7 @@ class KMeansDetector(spark: SparkSession, data: DataFrame) extends Detector{
 		val scaledSizes = sizes.zipWithIndex.map{case (s,cIndex) => (cIndex,(s - minSize)/diff)}.toMap
 		val scaledSizesB = spark.sparkContext.broadcast(scaledSizes)
 		val clusterColIndexB = spark.sparkContext.broadcast(df.columns.size - 1)
-		println("Found the following cluster sizes : "+sizes)
+		println("Found the following cluster sizes : "+sizes.mkString(", "))
 		val encoder = RowEncoder(df.schema)
 		println("Computing scores...")
 		val res = df.mapPartitions{iter =>
@@ -39,14 +40,16 @@ class KMeansDetector(spark: SparkSession, data: DataFrame) extends Detector{
 			iter.map{r => 
 				val seq = r.toSeq
 				val clusterId = seq(clusterColIndex).asInstanceOf[Int]
-				Row.fromSeq(seq :+ f(clusterId))
+				val score = 1.0 - f(clusterId)
+				Row.fromSeq(seq :+ score)
 			}
 		}(encoder)
 		res.withColumnRenamed("cluster","score")
 	}
 
 	private def getOptimizedModel(km: KMeans, train: DataFrame):KMeansModel = {
-		var nbK = 4
+		println("Finding optimal model...")
+		var nbK = minNbK
 		var model = km.setK(nbK).fit(train)
 		var prevWSSSE = model.computeCost(train)
 		nbK = nbK + 1
@@ -54,9 +57,9 @@ class KMeansDetector(spark: SparkSession, data: DataFrame) extends Detector{
 		var newWSSSE = model.computeCost(train)
 		var oldDiff = prevWSSSE - newWSSSE
 		var newDiff = 0.0
-		var ratio = 0.3
+		var ratio = elbowRatio
 		prevWSSSE = newWSSSE
-		while(ratio >= 0.3 && ratio < 1.0 && nbK<50){
+		while(ratio >= elbowRatio && ratio < 1.0 && nbK < maxNbK){
 			nbK = nbK + 1
 			model = km.setK(nbK).fit(train)
 			newWSSSE = model.computeCost(train)

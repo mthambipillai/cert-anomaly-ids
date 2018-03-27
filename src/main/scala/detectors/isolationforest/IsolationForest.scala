@@ -6,6 +6,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 import detectors.Detector
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 
 /*
 This detector implements the algorithm described in "Liu, Ting and Zhou. Isolation Forest" (1).
@@ -51,16 +52,16 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTr
 	*/
 	private def scoreUDF(tlc: Double) = udf((x:Int) => {
 		val mean = x/tlc
-		scala.math.pow(2.0,mean)
+		scala.math.pow(2.0, mean)
 	})
 
 	override def detect(threshold: Double = 0.5):DataFrame = {
 		val lc = (-1.0)*trees.length * c
 		val pathLengthThreshold = lc*(log(threshold)/log(2.0))
 		println("Computing path lengths...")
-		val mappedRDD = data.rdd.mapPartitions(sumPathLength)
 		val newSchema = data.schema.add(StructField("pathlengthacc", DoubleType, true))
-		val sumDF = data.sqlContext.createDataFrame(mappedRDD , newSchema)
+		val encoder = RowEncoder(newSchema)
+		val sumDF = data.mapPartitions(sumPathLength)(encoder)
 		println("Finding anomalies and their scores...")
 		val anomalies = sumDF.filter(col("pathlengthacc").leq(lit(pathLengthThreshold)))
 		val res = anomalies.withColumn("score", scoreUDF(lc)(col("pathlengthacc"))).drop("pathlengthacc")

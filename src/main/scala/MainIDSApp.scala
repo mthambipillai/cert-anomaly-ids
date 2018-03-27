@@ -1,5 +1,6 @@
 import features._
 import isolationforest._
+import kmeans._
 import scala.concurrent.duration._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.SparkSession
@@ -32,8 +33,10 @@ object MainIDSApp {
       case "detect" => {
         val features = readFeatures(spark, fe, eval, conf)
         features.cache()
-        val iForest = new IsolationForest(spark, features, features.count, conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
-        val anomalies = iForest.detect(conf.threshold)
+        val kmd = new KMeansDetector(spark, features)
+        val anomalies = kmd.detect(conf.threshold)
+        //val iForest = new IsolationForest(spark, features, 673314, conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
+        //val anomalies = iForest.detect(conf.threshold)
         features.unpersist()
         val resolvedAnomalies = fe.reverseResults(anomalies)
         eval.evaluateResults(resolvedAnomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)

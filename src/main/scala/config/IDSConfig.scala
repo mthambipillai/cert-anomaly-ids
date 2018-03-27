@@ -21,7 +21,9 @@ case class IDSConfig(
 	val anomalyIndex: Int,
   val inspectionResults: String,
   //IsolationForest parameters
-  val isolationForest: IsolationForestConfig
+  val isolationForest: IsolationForestConfig,
+  //KMeans parameters
+  val kMeans: KMeansConfig
 )
 
 object IDSConfig{
@@ -93,8 +95,9 @@ object IDSConfig{
 		val anomalyIndex = config.getInt("anomalyindex")
     val inspectionResults = config.getString("resultsfile")
     val isolationForest = IsolationForestConfig.load(config)
+    val kMeans = KMeansConfig.load(config)
 		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode,
-			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex, inspectionResults, isolationForest)
+			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex, inspectionResults, isolationForest, kMeans)
 
 		parser.parse(args, fromFile).getOrElse{
 			System.exit(1)

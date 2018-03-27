@@ -33,7 +33,8 @@ object MainIDSApp {
       case "detect" => {
         val features = readFeatures(spark, fe, eval, conf)
         features.cache()
-        val kmd = new KMeansDetector(spark, features)
+        val kmd = new KMeansDetector(spark, features, conf.kMeans.trainRatio,
+          conf.kMeans.minNbK, conf.kMeans.maxNbK, conf.kMeans.elbowRatio)
         val anomalies = kmd.detect(conf.threshold)
         //val iForest = new IsolationForest(spark, features, 673314, conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
         //val anomalies = iForest.detect(conf.threshold)

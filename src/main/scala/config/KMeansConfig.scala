@@ -5,7 +5,10 @@ case class KMeansConfig(
 	val trainRatio: Double,
 	val minNbK: Int,
 	val maxNbK: Int,
-	val elbowRatio: Double
+	val elbowRatio: Double,
+	val nbK: Int,
+	val lowBound: Long,
+	val upBound: Long
 )
 
 object KMeansConfig{
@@ -15,6 +18,9 @@ object KMeansConfig{
 		val minNbK = conf.getInt("minnbk")
 		val maxNbK = conf.getInt("maxnbk")
 		val elbowRatio = conf.getDouble("elbowratio")
-		KMeansConfig(trainRatio, minNbK, maxNbK, elbowRatio)
+		val nbK = conf.getInt("nbk")
+		val lowBound = conf.getLong("lowbound")
+		val upBound = conf.getLong("upbound")
+		KMeansConfig(trainRatio, minNbK, maxNbK, elbowRatio, nbK, lowBound, upBound)
 	}
 }

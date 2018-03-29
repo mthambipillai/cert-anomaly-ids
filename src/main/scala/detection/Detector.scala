@@ -1,4 +1,4 @@
-package detectors
+package detection
 import org.apache.spark.sql.DataFrame
 
 /*

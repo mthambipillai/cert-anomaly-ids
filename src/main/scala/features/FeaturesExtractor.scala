@@ -222,6 +222,19 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 		traffic.zip(entities).map{case (df,eType) => getFinalFeaturesAsColumns(df, scaleMode, eType)}
 	}
 
+	def writeFeaturesToFile(features: List[DataFrame], fileName: String):Unit = {
+		features.map(f => {
+			val w = f.columns.foldLeft(f){(prevdf, col) => rename(prevdf, col)}
+			w.write.mode(SaveMode.Overwrite).parquet(fileName)
+		})
+	}
+
+	private def rename(df: DataFrame, col: String):DataFrame = {
+		val toRemove = " ()".toSet
+		val newCol = col.filterNot(toRemove)
+		df.withColumnRenamed(col, newCol)
+	}
+
 	/*
 	Outputs the counts of the 20 most frequent values for each feature. This function
 	should be used solely to gain insight about the data.

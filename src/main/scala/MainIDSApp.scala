@@ -25,14 +25,16 @@ object MainIDSApp {
     val eval = new Evaluator()
     //def inject(df: DataFrame):DataFrame = eval
       //.injectIntrusions(df, IntrusionKind.allKinds.map(ik => (ik,4)), 1496361600902L, 1496447999253L, conf.interval)
-    val fe = new FeatureExtractor(spark, df => df)
-
+    
     conf.mode match{
       case "extract" => {
-        writeFeatures(fe, eval, conf)
+        val fe = new FeatureExtractor(spark, df => df)
+        val finalFeatures = fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval,
+          conf.trafficMode, conf.scaleMode)
+        fe.writeFeaturesToFile(finalFeatures, conf.featuresFile)
       }
       case "detect" => {
-        val features = readFeatures(spark, fe, eval, conf)
+        val features = spark.read.parquet(conf.featuresFile)
         features.cache()
         val en = new Ensembler()
         val kmd = new KMeansDetector(spark, features, conf.kMeans.trainRatio, conf.kMeans.minNbK,
@@ -58,25 +60,5 @@ object MainIDSApp {
     spark.stop()
     val t1 = System.nanoTime()
     println("Elapsed time: " + (((t1 - t0)/1000000000.0)/60.0) + "min")
-  }
-
-  private def writeFeatures(fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):Unit = {
-    val finalFeatures = fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval, conf.trafficMode, conf.scaleMode)
-    val finalFeaturesSrc = finalFeatures.head
-    //finalFeaturesSrc.show()
-    val w = finalFeaturesSrc.columns.foldLeft(finalFeaturesSrc){(prevdf, col) => rename(prevdf, col)}
-    w.write.mode(SaveMode.Overwrite).parquet(conf.featuresFile)
-    //eval.persistIntrusions()
-  }
-
-  private def rename(df: DataFrame, col: String):DataFrame = {
-    val toRemove = " ()".toSet
-    val newCol = col.filterNot(toRemove)
-    df.withColumnRenamed(col, newCol)
-  }
-
-  private def readFeatures(spark: SparkSession, fe: FeatureExtractor, eval: Evaluator, conf: IDSConfig):DataFrame = {
-    //eval.loadIntrusions()
-    spark.read.parquet(conf.featuresFile)
   }
 }

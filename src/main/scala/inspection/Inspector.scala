@@ -11,6 +11,8 @@ import scala.io.Source
 import org.apache.spark.sql.Row
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 
 class Inspector(spark: SparkSession){
 	private val dateFormatter = new SimpleDateFormat("dd.MM'-'HH:mm:ss:SSS");
@@ -45,13 +47,14 @@ class Inspector(spark: SparkSession){
 			val sqlStmt = getStmt(row, features, interval, eType, ee)
 			val logs = getLogs(sqlStmt)
 			val withID = logs.withColumn("id", lit(id))
-			val newCols = "id"::(logs.columns.toList.dropRight(1))
+			val newCols = "id"::(withID.columns.toList.dropRight(1))
 			withID.select(newCols.head, newCols.tail:_*)
 		}
 		val tagField = StructField("anomalytag", StringType, true)
 		val commentField = StructField("comments", StringType, true)
 		val newSchema = StructType(allLogs.head.schema++Seq(tagField, commentField))
 		val (tags, allRows) = allLogs.map(df => flag(df, Rule.BroSSHRules, newSchema)).toList.unzip
+
 		val nbPositives = tags.filter(_==true).size
 		val nbAll = tags.size
 		val precision = (nbPositives.toDouble/nbAll.toDouble)*100.0
@@ -88,11 +91,11 @@ class Inspector(spark: SparkSession){
 	}
 
 	private def getLogs(sqlStmt: String):DataFrame = {
-		val df = spark.sql(sqlStmt).sort(asc("timestamp"))
+		val df = spark.sql(sqlStmt).dropDuplicates("timestamp").sort(asc("timestamp"))
 		val df2 = df.withColumn("timestamp2", toDate(dateFormatter)(df("timestamp")))
 			.drop("timestamp").withColumnRenamed("timestamp2", "timestamp")
 		val newCols = "timestamp"::df2.columns.toList.dropRight(1)
-		df2.select(newCols.head, newCols.tail:_*)
+		df2.select(newCols.head, newCols.tail:_*).coalesce(1)
 	}
 
 	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType):(Boolean, List[Row]) = {

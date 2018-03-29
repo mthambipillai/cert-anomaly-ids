@@ -31,7 +31,8 @@ class Evaluator() extends Serializable{
 		println("Number of distinct "+trafficMode+" entities involved : "+distDetected.count)
 		val otherCols = detected.columns.toList.filterNot(c => c==eType || c=="timeinterval")
 		val newCols = eType::("timeinterval"::otherCols)
-		val top = distDetected.sort(desc("score")).limit(nbTop).select(newCols.head, newCols.tail:_*)
+		val scoreCol = newCols.filter(_.contains("score")).head
+		val top = distDetected.sort(desc(scoreCol)).limit(nbTop).select(newCols.head, newCols.tail:_*)
 		println("Writing top "+nbTop+" intrusions detected to "+destFile+".")
 		top.coalesce(1).write.format("com.databricks.spark.csv").option("header", "true").save(destFile)
 

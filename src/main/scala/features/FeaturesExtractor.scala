@@ -31,7 +31,7 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 		extractor: String = "hostsWithIpFallback"): (DataFrame,List[Feature]) = {
 		val logFile = spark.read.parquet(filePath)
 		logFile.createOrReplaceTempView("logfiles")
-		val sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles"
+		val sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles LIMIT 60000"
 		val df = spark.sql(sqlStmt)
 
 		val ee = EntityExtractor.getByName(extractor)
@@ -220,15 +220,6 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 		
 		println("Begin to scale the features...")
 		traffic.zip(entities).map{case (df,eType) => getFinalFeaturesAsColumns(df, scaleMode, eType)}
-	}
-
-	/*
-	Computes the original entity and timestamp interval for each parsed and scaled intrusion of 'intrusions'
-	back from the original values computed with 'extractRawBasicFeatures'.
-	*/
-	def reverseResults(intrusions: DataFrame, eType: String = "srcentity"):DataFrame = {
-		println("Reversing the intrusions detected...")
-		intrusions.drop("scaled"+eType+"Index", "scaledtimeinterval")
 	}
 
 	/*

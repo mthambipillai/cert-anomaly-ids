@@ -5,7 +5,7 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
-import detectors.Detector
+import detection.Detector
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 
 /*
@@ -21,6 +21,7 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTr
 		}
 	}
 	private val c:Double = {//average path length as given in section 2 of (1)
+		println("\nStarting to build isolationForest model...\n")
 		println("nb samples : "+dataSize)
 		val h = log(dataSize-1)+0.5772156649
 		val res = 2*h - (2*(dataSize-1)/dataSize)
@@ -56,16 +57,18 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTr
 	})
 
 	override def detect(threshold: Double = 0.5):DataFrame = {
+		println("\nStarting to detect with isolationForest...\n")
 		val lc = (-1.0)*trees.length * c
 		val pathLengthThreshold = lc*(log(threshold)/log(2.0))
 		println("Computing path lengths...")
 		val newSchema = data.schema.add(StructField("pathlengthacc", DoubleType, true))
 		val encoder = RowEncoder(newSchema)
 		val sumDF = data.mapPartitions(sumPathLength)(encoder)
-		println("Finding anomalies and their scores...")
+		println("Computing scores from path lengths...")
 		val anomalies = sumDF.filter(col("pathlengthacc").leq(lit(pathLengthThreshold)))
-		val res = anomalies.withColumn("score", scoreUDF(lc)(col("pathlengthacc"))).drop("pathlengthacc")
-		res.filter(col("score").geq(threshold))
+		val res = anomalies.withColumn("if_score", scoreUDF(lc)(col("pathlengthacc"))).drop("pathlengthacc")
+		println("Returning anomalies with score above "+threshold+"...")
+		res.filter(col("if_score").geq(threshold))
 	}
 
 	/*

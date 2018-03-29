@@ -5,3 +5,6 @@ target/*
 metastore_db/*
 lib_managed/*
 knownips.txt
+clientstats.txt
+serverstats.txt
+cipher_algstats.txt

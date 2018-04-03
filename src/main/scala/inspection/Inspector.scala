@@ -13,6 +13,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.SaveMode
 
 class Inspector(spark: SparkSession){
 	private val dateFormatter = new SimpleDateFormat("dd.MM'-'HH:mm:ss:SSS");
@@ -65,7 +66,7 @@ class Inspector(spark: SparkSession){
 		val rdd = spark.sparkContext.parallelize(allRows.flatten)
 		val all = spark.createDataFrame(rdd, newSchema)
 		println("Writing results to "+resultsFile+"...")
-		all.coalesce(1).write.format("com.databricks.spark.csv").option("header", "true").save(resultsFile)
+		all.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save(resultsFile)
 	}
 
 	private def loadAnoms(anomaliesFile: String): Array[Row]={

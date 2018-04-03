@@ -9,6 +9,7 @@ import org.apache.spark.sql.SaveMode
 import java.io._
 import au.com.bytecode.opencsv.CSVWriter
 import scala.collection.mutable.ListBuffer
+import org.apache.spark.sql.SaveMode
 
 class Evaluator() extends Serializable{
 	private val r = new Random(System.currentTimeMillis())
@@ -34,7 +35,7 @@ class Evaluator() extends Serializable{
 		val scoreCol = newCols.filter(_.contains("score")).head
 		val top = distDetected.sort(desc(scoreCol)).limit(nbTop).select(newCols.head, newCols.tail:_*)
 		println("Writing top "+nbTop+" intrusions detected to "+destFile+".")
-		top.coalesce(1).write.format("com.databricks.spark.csv").option("header", "true").save(destFile)
+		top.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save(destFile)
 
 		val nbTotal = intrusions.size
 		if(nbTotal==0){

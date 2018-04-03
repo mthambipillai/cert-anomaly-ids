@@ -73,12 +73,6 @@
     "doc" : "The originator’s IP address.",
     "aggs" : ["countdistinct"]
   }, {
-    "name" : "srcport",
-    "parent" : null,
-    "type" : "Int",
-    "doc" : "The originator’s port number.",
-    "aggs" : ["mostcommon","countdistinct"]
-  }, {
     "name" : "timestamp",
     "parent" : null,
     "type" : "Long",

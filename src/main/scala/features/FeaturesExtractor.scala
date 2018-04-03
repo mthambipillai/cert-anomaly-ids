@@ -28,51 +28,47 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	they can be used for machine learning.
 	*/
 	def extractRawBasicFeatures(filePath: String, features: List[Feature],
-		extractor: String = "hostsWithIpFallback"): (DataFrame,List[Feature]) = {
+		extractor: String = "hostsWithIpFallback", eType: String): (DataFrame,List[Feature]) = {
 		val logFile = spark.read.parquet(filePath)
 		logFile.createOrReplaceTempView("logfiles")
 		val sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles LIMIT 60000"
 		val df = spark.sql(sqlStmt)
 
 		val ee = EntityExtractor.getByName(extractor)
-		val (df2,newFeatures) = ee.extract(df, features)
+		val (df2,newFeatures) = ee.extract(df, features, eType)
 
 		val dfInjected = inject(df2)
 
 		val res = newFeatures.map(f => f.parseCol(_)).foldLeft(dfInjected){ (previousdf, parser) => parser(previousdf) }
-		res.show()
 		(res, newFeatures)
 	}
 
 	/*
-	Returns 2 DataFrames representing the traffic features from the basic features in 'df': aggregation over each interval of size 'interval'
-	per 1) src entity, and 2) dst entity.They need to be further processed before they can be used for machine learning.
+	Returns a DataFrame representing the traffic features from the basic features in 'df': aggregation over each interval of size 'interval'
+	per src or dst entity. They need to be further processed before they can be used for machine learning.
 	*/
-	def extractRawTrafficFeatures(df: DataFrame, features: List[Feature], interval: Duration, entities: List[String]): List[DataFrame] = {
+	def extractRawTrafficFeatures(df: DataFrame, features: List[Feature], interval: Duration, eType: String): DataFrame = {
 		val minMax = df.agg(min("timestamp"),max("timestamp")).head
 		val minTime = minMax.getDouble(0)
 		val maxTime = minMax.getDouble(1)
 		val nbIntervals = (((maxTime-minTime)/interval.toMillis)+1).toInt
-		val entitiesAggs = entities.map(eType => {
-			val aggs = features.filter(f => f.name!=eType || f.name!=eType+"Index").flatMap(_.aggregate())
-			(eType, aggs)
-		})
+		val aggs = features.flatMap(_.aggregate())
 		val splits = (1 to nbIntervals).map(i => {
 			val lowB = spark.sparkContext.broadcast(minTime + (i-1)*interval.toMillis)
 			val highB = spark.sparkContext.broadcast(lowB.value + interval.toMillis)
 			val subdf = df.filter(col("timestamp") >= lowB.value).filter(col("timestamp") < highB.value)
-			val dfs = entitiesAggs.map{case (e,aggs) => aggregate(subdf, e, aggs)}
-			dfs.map(_.withColumn("timeinterval",lit(lowB.value)))
+			val aggdf = aggregate(subdf, eType, aggs)
+			aggdf.withColumn("timeinterval",lit(lowB.value))
 		})
-		splits.tail.foldLeft(splits.head){ (ls1, ls2) => ls1.zip(ls2).map{case (df1, df2) => df1.union(df2)}}
+		splits.tail.foldLeft(splits.head){case (df1, df2) => df1.union(df2)}
 	}
 
 	/*
-	Returns 2 DataFrames representing the traffic features : aggregation over the whole 'df' per 1) src entity,
-	and 2) dst entity.They need to be further processed before they can be used for machine learning.
+	Returns a DataFrame representing the traffic features : aggregation over the whole 'df' per src entity,
+	or dst entity.It needs to be further processed before they can be used for machine learning.
 	*/
 	private def aggregate(df: DataFrame, eType: String, aggs: List[Column]): DataFrame = {
-		df.groupBy(eType,eType+"Index").agg(aggs.head, aggs.tail:_*)
+		df.groupBy(eType, eType+"Index").agg(aggs.head, aggs.tail:_*)
 	}
 
 	/*
@@ -199,34 +195,25 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	is parsed and normalized. The 'colsMode' parameter defines whether these features are kept in
 	separate columns (value "columns") or assembled in a single vector column (value "assembled"). The
 	src and dst entities are extracted according to the 'extractor' parameter. The aggregation of logs by entities
-	is done over each interval of duration 'interval'. 'trafficMode' defines whether the logs are grouped by "src",
-	"dst" or "all".
+	is done over each interval of duration 'interval'. 'trafficMode' defines whether the logs are grouped by "src" or "dst".
 	*/
 	def extractFeatures(filePath: String, features: List[Feature],
 		extractor: String = "hostsWithIpFallback", interval: Duration,
-		trafficMode: String = "src", scaleMode: String = "unit"): List[DataFrame] = {
+		trafficMode: String = "src", scaleMode: String = "unit"): DataFrame = {
 		println("Begin to extract basic features...")
-		val (basic, newFeatures) = extractRawBasicFeatures(filePath, features, extractor)
+		val entity = trafficMode+"entity"
+		val (basic, newFeatures) = extractRawBasicFeatures(filePath, features, extractor, entity)
 		println("Done.")
 		println("Begin to extract traffic features...")
-		val entities = trafficMode match{
-			case "src" => List("srcentity")
-			case "dst" => List("dstentity")
-			case "all" => List("srcentity", "dstentity")
-		}
-		val traffic = extractRawTrafficFeatures(basic, newFeatures, interval, entities)
-		//frequentValues(traffic.head)
+		val traffic = extractRawTrafficFeatures(basic, newFeatures, interval, entity)
 		println("Done.")
-		
 		println("Begin to scale the features...")
-		traffic.zip(entities).map{case (df,eType) => getFinalFeaturesAsColumns(df, scaleMode, eType)}
+		getFinalFeaturesAsColumns(traffic, scaleMode, entity)
 	}
 
-	def writeFeaturesToFile(features: List[DataFrame], fileName: String):Unit = {
-		features.map(f => {
-			val w = f.columns.foldLeft(f){(prevdf, col) => rename(prevdf, col)}
-			w.write.mode(SaveMode.Overwrite).parquet(fileName)
-		})
+	def writeFeaturesToFile(features: DataFrame, fileName: String):Unit = {
+		val w = features.columns.foldLeft(features){(prevdf, col) => rename(prevdf, col)}
+		w.write.mode(SaveMode.Overwrite).parquet(fileName)
 	}
 
 	private def rename(df: DataFrame, col: String):DataFrame = {

@@ -40,7 +40,7 @@ object MainIDSApp {
         val kmd = new KMeansDetector(spark, features, conf.kMeans.trainRatio, conf.kMeans.minNbK,
           conf.kMeans.maxNbK, conf.kMeans.elbowRatio, conf.kMeans.nbK, conf.kMeans.lowBound, conf.kMeans.upBound)
         val iForest = new IsolationForest(spark, features, features.count, conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
-        val anomalies = en.detectAndCombine(conf.trafficMode, conf.threshold, List(kmd, iForest))
+        val anomalies = en.detectAndCombine(conf.trafficMode,conf.ensembleMode, conf.threshold, List(kmd, iForest))
         features.unpersist()
         eval.evaluateResults(anomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)
       }

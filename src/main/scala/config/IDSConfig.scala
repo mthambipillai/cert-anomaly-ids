@@ -14,6 +14,7 @@ case class IDSConfig(
 	val interval: Duration,
 	val trafficMode: String,
 	val scaleMode: String,
+  val ensembleMode: String,
 	val featuresFile: String,
 	val threshold: Double,
 	val topAnomalies: Int,
@@ -37,7 +38,7 @@ object IDSConfig{
       opt[Duration]('i', "interval").action( (x, c) =>
         c.copy(interval = x) ).text("Interval for aggregation per src/dst entity in Scala Duration format. Default is 1 hour.")
       opt[String]('t', "trafficmode").action( (x, c) =>
-        c.copy(trafficMode = x) ).text("With which entity to aggregate. Can be either src, dst or all.")
+        c.copy(trafficMode = x) ).text("With which entity to aggregate. Can be either src or dst.")
       help("help").text("Prints this usage text.")
 
       cmd("extract").action( (_, c) => c.copy(mode = "extract") ).
@@ -60,7 +61,9 @@ object IDSConfig{
           opt[Int]('n', "nbtopanomalies").action( (x, c) =>
             c.copy(topAnomalies = x) ).text("Number of top anomalies to store."),
           opt[String]('a', "anomaliesfile").action( (x, c) =>
-            c.copy(anomaliesFile = x) ).text("CSV file to write the detected anomalies to.")
+            c.copy(anomaliesFile = x) ).text("CSV file to write the detected anomalies to."),
+          opt[String]('e', "ensemblemode").action( (x, c) =>
+            c.copy(ensembleMode = x) ).text("Determines how detectors' scores are combined. mean or max.")
         )
       cmd("inspect").action( (_, c) => c.copy(mode = "inspect") ).
         text("Inspect the logs for a specific already detected anomaly.").
@@ -88,6 +91,7 @@ object IDSConfig{
 		val interval = Duration(config.getString("aggregationtime"))
 		val trafficMode = config.getString("trafficmode")
 		val scaleMode = config.getString("scalemode")
+    val ensembleMode = config.getString("ensemblemode")
 		val featuresFile = config.getString("featuresfile")
 		val threshold = config.getDouble("threshold")
 		val topAnomalies = config.getInt("nbtopanomalies")
@@ -96,7 +100,7 @@ object IDSConfig{
     val inspectionResults = config.getString("resultsfile")
     val isolationForest = IsolationForestConfig.load(config)
     val kMeans = KMeansConfig.load(config)
-		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode,
+		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode, ensembleMode,
 			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex, inspectionResults, isolationForest, kMeans)
 
 		parser.parse(args, fromFile).getOrElse{

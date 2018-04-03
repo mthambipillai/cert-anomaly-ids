@@ -85,9 +85,9 @@ class Evaluator() extends Serializable{
 		val fileNames = getListOfFiles("intrusions").map(_.getName())
 		this.intrusions = fileNames.map{ name =>
 			val ois = new ObjectInputStream(new FileInputStream("intrusions/"+name))
-		    val intrusion = ois.readObject.asInstanceOf[Intrusion]
-		    ois.close
-		    intrusion
+			val intrusion = ois.readObject.asInstanceOf[Intrusion]
+			ois.close
+			intrusion
 		}
 	}
 

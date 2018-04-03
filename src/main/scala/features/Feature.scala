@@ -112,7 +112,7 @@ object Feature{
 
 	/*
 	Converts a column of src/dst entities string values to integers. This is not the same as parsing simple
-	string values because we need to keep the previous column to be later reversed.
+	string values because we need to keep the previous column.
 	*/
 	def parseEntityCol(df: DataFrame, columnName: String): DataFrame = {
 		val df2 = df.na.fill("NOT_RESOLVED", columnName :: Nil)

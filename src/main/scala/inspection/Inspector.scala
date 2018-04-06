@@ -14,6 +14,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.broadcast.Broadcast
 
 class Inspector(spark: SparkSession){
 	private val dateFormatter = new SimpleDateFormat("dd.MM'-'HH:mm:ss:SSS");
@@ -49,24 +50,44 @@ class Inspector(spark: SparkSession){
 			val logs = getLogs(sqlStmt)
 			val withID = logs.withColumn("id", lit(id))
 			val newCols = "id"::(withID.columns.toList.dropRight(1))
-			withID.select(newCols.head, newCols.tail:_*)
+			val ordered = withID.select(newCols.head, newCols.tail:_*)
+			ordered.withColumn("anomalytag",lit("")).withColumn("comments",lit(""))
 		}
-		val tagField = StructField("anomalytag", StringType, true)
-		val commentField = StructField("comments", StringType, true)
-		val newSchema = StructType(allLogs.head.schema++Seq(tagField, commentField))
-		val (tags, allRows) = allLogs.map(df => flag(df, Rule.BroSSHRules, newSchema)).toList.unzip
+		val nbCols = features.size+3//columns 'id', 'anomalytag' and 'comments' were added
+		val tagIndexB = spark.sparkContext.broadcast(nbCols-2)
+		val commentIndexB = spark.sparkContext.broadcast(nbCols-1)
+		val newSchema = allLogs.head.schema
+		val encoder = RowEncoder(newSchema)
+		val (tags, dfs) = allLogs.map(df => 
+			flag(df, Rule.BroSSHRules, newSchema, encoder, tagIndexB, commentIndexB)).toList.unzip
+		val all = dfs.tail.foldLeft(dfs.head)(_.union(_))
 
+		printPrecision(tags, resultsFile)
+
+		println("Writing results to "+resultsFile+"...")
+		all.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save(resultsFile)
+	}
+
+	private def printPrecision(tags: List[Boolean], resultsFile: String):Unit = {
 		val nbPositives = tags.filter(_==true).size
 		val nbAll = tags.size
+		val nbNegatives = nbAll - nbPositives
 		val precision = (nbPositives.toDouble/nbAll.toDouble)*100.0
 		println("Number of detected anomalies tagged as true anomalies (Precision) : "+
 			nbPositives+"/"+nbAll+" = "+precision+"%")
-		println("The system was unable to tag the remaining "+(nbAll - nbPositives)+" detected anomalies. "+
-			"Tag them manually in "+resultsFile+" to obtain the exact precision measurement.\n")
-		val rdd = spark.sparkContext.parallelize(allRows.flatten)
-		val all = spark.createDataFrame(rdd, newSchema)
-		println("Writing results to "+resultsFile+"...")
-		all.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save(resultsFile)
+		val text = if(nbNegatives==0){
+			"The system was able to tag every anomaly. See "+resultsFile+" for further investigation."
+		}else{
+			val begin = "The system was unable to tag the remaining "+nbNegatives+" detected "
+			val middle = if(nbNegatives==1){
+				"anomaly. Tag it "
+			}else{
+				"anomalies. Tag them "
+			}
+			val end = "manually in "+resultsFile+" to obtain the exact precision measurement."
+			begin+middle+end
+		}
+		println(text+"\n")
 	}
 
 	private def loadAnoms(anomaliesFile: String): Array[Row]={
@@ -99,15 +120,21 @@ class Inspector(spark: SparkSession){
 		df2.select(newCols.head, newCols.tail:_*).coalesce(1)
 	}
 
-	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType):(Boolean, List[Row]) = {
-		val tagged = logs.withColumn("anomalytag",lit("")).withColumn("comments",lit(""))
-		val nbCols = tagged.columns.size
-		val tagIndex = nbCols-2
-		val commentIndex = nbCols-1
-		val rows = tagged.collect.toList
-		rules.foldLeft((false, rows)){case ((tag, rows), rule) => 
-			val (nextTag, nextRows) = rule.flag(rows, schema, tagIndex, commentIndex)
-			(tag||nextTag, nextRows)
-		}
+	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType, encoder: ExpressionEncoder[Row],
+		tagIndexB: Broadcast[Int], commentIndexB: Broadcast[Int]):(Boolean, DataFrame) = {
+		val finalTag = spark.sparkContext.longAccumulator("Tag")
+		val rulesWithAccs = rules.map(r => (r, r.initAcc(spark)))
+		val tagged = logs.mapPartitions(iter => {
+			val rows = iter.toList
+			val tagIndex = tagIndexB.value
+			val commentIndex = commentIndexB.value
+			val (tag, nRows) = rulesWithAccs.foldLeft((false, rows)){case ((tag, rows), (rule, acc)) => 
+				val (nextTag, nextRows) = rule.flag(rows, acc, schema, tagIndex, commentIndex)
+				(tag||nextTag, nextRows)
+			}
+			if(tag) finalTag.add(1)
+			nRows.toIterator
+		})(encoder)
+		(finalTag.value == 0, tagged)
 	}
 }

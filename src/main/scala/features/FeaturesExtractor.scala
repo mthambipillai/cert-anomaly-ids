@@ -31,7 +31,7 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 		extractor: String = "hostsWithIpFallback", eType: String): (DataFrame,List[Feature]) = {
 		val logFile = spark.read.parquet(filePath)
 		logFile.createOrReplaceTempView("logfiles")
-		val sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles LIMIT 60000"
+		val sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles"
 		val df = spark.sql(sqlStmt)
 
 		val ee = EntityExtractor.getByName(extractor)

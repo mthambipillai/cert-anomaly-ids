@@ -15,7 +15,8 @@ case class IDSConfig(
 	val trafficMode: String,
 	val scaleMode: String,
   val ensembleMode: String,
-	val featuresFile: String,
+  val featuresFile: String,
+  val detectors: String,
 	val threshold: Double,
 	val topAnomalies: Int,
 	val anomaliesFile: String,
@@ -56,6 +57,8 @@ object IDSConfig{
         children(
           opt[String]('f', "featuresfile").action( (x, c) =>
             c.copy(featuresFile = x) ).text("Parquet file to read the scaled features from."),
+          opt[String]('d', "detectors").action( (x, c) =>
+            c.copy(detectors = x) ).text("Detectors to use. Names separated by commas."),
           opt[Double]('t', "threshold").action( (x, c) =>
             c.copy(threshold = x) ).text("Threshold between 0.0 and 1.0 above which logs are considered as anomalies."),
           opt[Int]('n', "nbtopanomalies").action( (x, c) =>
@@ -93,6 +96,7 @@ object IDSConfig{
 		val scaleMode = config.getString("scalemode")
     val ensembleMode = config.getString("ensemblemode")
 		val featuresFile = config.getString("featuresfile")
+    val detectors = config.getString("detectors")
 		val threshold = config.getDouble("threshold")
 		val topAnomalies = config.getInt("nbtopanomalies")
 		val anomaliesFile = config.getString("anomaliesfile")
@@ -101,7 +105,7 @@ object IDSConfig{
     val isolationForest = IsolationForestConfig.load(config)
     val kMeans = KMeansConfig.load(config)
 		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode, ensembleMode,
-			featuresFile, threshold, topAnomalies, anomaliesFile, anomalyIndex, inspectionResults, isolationForest, kMeans)
+			featuresFile, detectors, threshold, topAnomalies, anomaliesFile, anomalyIndex, inspectionResults, isolationForest, kMeans)
 
 		parser.parse(args, fromFile).getOrElse{
 			System.exit(1)

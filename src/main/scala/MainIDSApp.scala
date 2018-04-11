@@ -14,6 +14,7 @@ import com.typesafe.config.{ Config, ConfigFactory }
 import config._
 import inspection._
 import detection.Ensembler
+import detection.Detector
 
 object MainIDSApp {
   def main(args: Array[String]) {
@@ -34,13 +35,13 @@ object MainIDSApp {
         fe.writeFeaturesToFile(finalFeatures, conf.featuresFile)
       }
       case "detect" => {
-        val features = spark.read.parquet(conf.featuresFile)
+        val featuresFile = conf.featuresFile+".parquet"
+        println("Reading features from "+featuresFile+"...")
+        val features = spark.read.parquet(featuresFile)
         features.cache()
         val en = new Ensembler()
-        val kmd = new KMeansDetector(spark, features, conf.kMeans.trainRatio, conf.kMeans.minNbK,
-          conf.kMeans.maxNbK, conf.kMeans.elbowRatio, conf.kMeans.nbK, conf.kMeans.lowBound, conf.kMeans.upBound)
-        val iForest = new IsolationForest(spark, features, features.count, conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
-        val anomalies = en.detectAndCombine(conf.trafficMode,conf.ensembleMode, conf.threshold, List(kmd, iForest))
+        val detectors = Detector.getDetectors(spark, conf, features)
+        val anomalies = en.detectAndCombine(conf.trafficMode,conf.ensembleMode, conf.threshold, detectors)
         features.unpersist()
         eval.evaluateResults(anomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)
       }

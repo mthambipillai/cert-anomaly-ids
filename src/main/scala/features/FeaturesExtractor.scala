@@ -213,7 +213,9 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 
 	def writeFeaturesToFile(features: DataFrame, fileName: String):Unit = {
 		val w = features.columns.foldLeft(features){(prevdf, col) => rename(prevdf, col)}
-		w.write.mode(SaveMode.Overwrite).parquet(fileName)
+		w.write.mode(SaveMode.Overwrite).parquet(fileName+".parquet")
+		val stats = w.describe()
+		stats.write.mode(SaveMode.Overwrite).parquet(fileName+"-stats.parquet")
 	}
 
 	private def rename(df: DataFrame, col: String):DataFrame = {

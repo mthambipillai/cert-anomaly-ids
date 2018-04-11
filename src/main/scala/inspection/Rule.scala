@@ -27,31 +27,7 @@ abstract class Rule(
 	}
 }
 
-case class SimpleRule(
-	private val flagAux: (StructType, List[Row]) => (Boolean, List[String])
-) extends Rule((s: StructType, r: List[Row], a: Option[DoubleAccumulator]) => flagAux(s,r)){
-	@Override
-	def initAcc(spark: SparkSession):Option[DoubleAccumulator] = None
-}
-
-case class ComplexRule(
-	name: String,
-	private val flagAux: (StructType, List[Row], DoubleAccumulator) => (Boolean, List[String])
-) extends Rule((s: StructType, r: List[Row], a: Option[DoubleAccumulator]) =>
-	flagAux(s, r,ComplexRule.validateAcc(a, name))){
-	@Override
-	def initAcc(spark: SparkSession):Option[DoubleAccumulator] = Some(spark.sparkContext.doubleAccumulator(name))
-}
-
-object ComplexRule{
-	def validateAcc(acc: Option[DoubleAccumulator], name: String):DoubleAccumulator = acc match{
-		case Some(accumulator) => accumulator
-		case None => throw new Exception("ComplexRule "+name+" must have an accumulator.")
-	}
-}
-
 object Rule{
-
 	private def makeRule[T](fieldName: String, nullFallBack: T,
 		rowF: (Row, Int) => T, checkF: T => Boolean, commentText: String):SimpleRule = SimpleRule((schema, rows) => {
 		val index = schema.fieldIndex(fieldName)
@@ -69,16 +45,21 @@ object Rule{
 	val nbAttemptsSSH = makeRule[Int]("auth_attempts", 4, _.getInt(_), _>=4, "high/unknown nb attempts")
 	val dstPortSSH = makeRule[Int]("dstport", -1, _.getInt(_), _!=22, "dst port not 22")
 	val versionSSH = makeRule[Int]("version", -1, _.getInt(_), _<2, "version less than 2.x")
-	private val maliciousIPs = Source.fromFile("knownips.txt").getLines.toList
-	val maliciousSrcIP = makeRule[String]("srcip", "", _.getString(_), maliciousIPs.contains(_), "known malicious ip")
-	private val dsthosts = Source.fromFile("dsthoststats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
-	val unusualDstHostSSH = makeRule[String]("dsthost", "null", _.getString(_), !dsthosts.contains(_), "unusual dsthost")
-	private val clients = Source.fromFile("clientstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
-	val unusualClientSSH = makeRule[String]("client", "null", _.getString(_), !clients.contains(_), "unusual client")
-	private val servers = Source.fromFile("serverstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
-	val unusualServerSSH = makeRule[String]("server", "null", _.getString(_), !servers.contains(_), "unusual server")
-	private val ciphers = Source.fromFile("cipher_algstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
-	val unusualCipherSSH = makeRule[String]("cipher_alg", "null", _.getString(_), !ciphers.contains(_), "unusual cipher")
+	val maliciousSrcIP = makeRule[String]("srcip", "", _.getString(_), {
+		val maliciousIPs = Source.fromFile("knownips.txt").getLines.toList
+		maliciousIPs.contains(_)}, "known malicious ip")
+	val unusualDstHostSSH = makeRule[String]("dsthost", "null", _.getString(_), {
+		val dsthosts = Source.fromFile("dsthoststats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
+		!dsthosts.contains(_)}, "unusual dsthost")
+	val unusualClientSSH = makeRule[String]("client", "null", _.getString(_), {
+		val clients = Source.fromFile("clientstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
+		!clients.contains(_)}, "unusual client")
+	val unusualServerSSH = makeRule[String]("server", "null", _.getString(_), {
+		val servers = Source.fromFile("serverstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
+		!servers.contains(_)}, "unusual server")
+	val unusualCipherSSH = makeRule[String]("cipher_alg", "null", _.getString(_), {
+		val ciphers = Source.fromFile("cipher_algstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
+		!ciphers.contains(_)}, "unusual cipher")
 
 	val totalNbAttemptsSSH = ComplexRule("totalNbAttemptsSSH", (schema, rows, acc) => {
 		val index = schema.fieldIndex("auth_attempts")

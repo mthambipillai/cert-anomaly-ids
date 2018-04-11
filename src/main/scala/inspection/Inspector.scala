@@ -123,12 +123,12 @@ class Inspector(spark: SparkSession){
 	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType, encoder: ExpressionEncoder[Row],
 		tagIndexB: Broadcast[Int], commentIndexB: Broadcast[Int]):(Boolean, DataFrame) = {
 		val finalTag = spark.sparkContext.longAccumulator("Tag")
-		val rulesWithAccs = rules.map(r => (r, r.initAcc(spark)))
+		val rulesWithAccsB = spark.sparkContext.broadcast(rules.map(r => (r, r.initAcc(spark))))
 		val tagged = logs.mapPartitions(iter => {
 			val rows = iter.toList
 			val tagIndex = tagIndexB.value
 			val commentIndex = commentIndexB.value
-			val (tag, nRows) = rulesWithAccs.foldLeft((false, rows)){case ((tag, rows), (rule, acc)) => 
+			val (tag, nRows) = rulesWithAccsB.value.foldLeft((false, rows)){case ((tag, rows), (rule, acc)) => 
 				val (nextTag, nextRows) = rule.flag(rows, acc, schema, tagIndex, commentIndex)
 				(tag||nextTag, nextRows)
 			}

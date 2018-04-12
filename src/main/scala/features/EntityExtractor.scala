@@ -2,6 +2,8 @@ package features
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 import scala.util.Try
+import scalaz._
+import Scalaz._
 
 /*
 An 'Entity' represents either the originator or the responder of the connection.
@@ -19,7 +21,7 @@ case class EntityExtractor(
 	/*
 	Returns the data frame 'df' and the features 'features' with 2 new columns/features : 'srcentity' and 'dstentity'.
 	*/
-	def extract(df: DataFrame, features : List[Feature], eType: String):(DataFrame, List[Feature]) = {
+	def extract(df: DataFrame, features : List[Feature], eType: String):String\/(DataFrame, List[Feature]) = {
 		val featuresNames = features.map(_.name)
 		if(requiredColumns.forall(c => featuresNames.contains(c))){
 			val (df2, features2) = extractAux(df, features, eType)
@@ -27,21 +29,21 @@ case class EntityExtractor(
 			val features2Ok = features2Names.contains("srcentity") && features2Names.contains("dstentity")
 			val df2Ok = Try(df2("srcentity")).isSuccess && Try(df2("dstentity")).isSuccess
 			if(features2Ok && df2Ok){
-				(df2, features2)
+				(df2, features2).right
 			}else{
-				throw new Exception("'srcentity' and 'dstentity' must both be present after extraction.")
+				("'srcentity' and 'dstentity' must both be present after extraction.").left
 			}
 		}else{
-			throw new Exception("Not all required columns are present. Need : "+requiredColumns.mkString(", ")+".")
+			("Not all required columns are present. Need : "+requiredColumns.mkString(", ")+".").left
 		}
 	}
 
-	def reverse(entityValue: String):(String, String) = {
+	def reverse(entityValue: String):String\/(String, String) = {
 		val (colType, value) = reverseAux(entityValue)
 		if(requiredColumns.contains("src"+colType) || requiredColumns.contains("dst"+colType)){
-			(colType, value)
+			(colType, value).right
 		}else{
-			throw new Exception("The original column must be a required column.")
+			("The original column must be a required column.").left
 		}
 	}
 }

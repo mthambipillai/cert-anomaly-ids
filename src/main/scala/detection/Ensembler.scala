@@ -1,4 +1,8 @@
 package detection
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scalaz._
+import Scalaz._
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -8,15 +12,19 @@ class Ensembler(){
 
 	private val meanUDF = udf((score1: Double, score2: Double) => (score1+score2)/2.0)
 	private val maxUDF = udf((score1: Double, score2: Double) => scala.math.max(score1, score2))
-	def detectAndCombine(eType:String, ensembleMode: String, threshold: Double, detectors: List[Detector]):DataFrame = {
-		val eUDF = ensembleMode match{
-			case "mean" => meanUDF
-			case "max" => maxUDF
-			case _ => throw new Exception("Unknown ensembleMode "+ensembleMode)
+	def detectAndCombine(eType:String, ensembleMode: String, threshold: Double,
+		detectors: List[Detector]):String\/DataFrame = {
+		for(
+			eUDF <- ensembleMode match{
+						case "mean" => meanUDF.right
+						case "max" => maxUDF.right
+						case _ => ("Unknown ensembleMode "+ensembleMode).left
+					}
+		)yield{
+			val detected = detectAll(threshold, detectors)
+			println("\nCombining different detectors results with mode '"+ensembleMode+"'...")
+			combineAll(eType, eUDF, threshold, detected)
 		}
-		val detected = detectAll(threshold, detectors)
-		println("\nCombining different detectors results with mode '"+ensembleMode+"'...")
-		combineAll(eType, eUDF, threshold, detected)
 	}
 
 	def detectAll(threshold: Double, detectors: List[Detector]):Seq[DataFrame] = {

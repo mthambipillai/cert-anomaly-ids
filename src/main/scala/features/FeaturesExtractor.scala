@@ -16,6 +16,9 @@ import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.Column
+import scala.util.Try
+import scalaz._
+import Scalaz._
 
 /*
 API to extract and preprocess features from data.
@@ -28,19 +31,22 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	they can be used for machine learning.
 	*/
 	def extractRawBasicFeatures(filePath: String, features: List[Feature],
-		extractor: String = "hostsWithIpFallback", eType: String): (DataFrame,List[Feature]) = {
-		val logFile = spark.read.parquet(filePath)
-		logFile.createOrReplaceTempView("logfiles")
-		val sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles"
-		val df = spark.sql(sqlStmt)
-
-		val ee = EntityExtractor.getByName(extractor)
-		val (df2,newFeatures) = ee.extract(df, features, eType)
-
-		val dfInjected = inject(df2)
-
-		val res = newFeatures.map(f => f.parseCol(_)).foldLeft(dfInjected){ (previousdf, parser) => parser(previousdf) }
-		(res, newFeatures)
+		extractor: String = "hostsWithIpFallback", eType: String): String\/(DataFrame,List[Feature]) = {
+		println("Begin to extract basic features...")
+		for{
+			logFile <- Try(spark.read.parquet(filePath)).toDisjunction.leftMap(e =>
+				"Could not read '"+filePath+"' because of "+e.getMessage)
+			_ = logFile.createOrReplaceTempView("logfiles")
+			sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles"
+			df <- Try(spark.sql(sqlStmt)).toDisjunction.leftMap(e =>
+				"Could not execute statement '"+sqlStmt+"' because of "+e.getMessage)
+			ee = EntityExtractor.getByName(extractor)
+			(df2,newFeatures) <- ee.extract(df, features, eType)
+		}yield{
+			val dfInjected = inject(df2)
+			val res = newFeatures.map(f => f.parseCol(_)).foldLeft(dfInjected){ (previousdf, parser) => parser(previousdf) }
+			(res, newFeatures)
+		}
 	}
 
 	/*
@@ -48,6 +54,7 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	per src or dst entity. They need to be further processed before they can be used for machine learning.
 	*/
 	def extractRawTrafficFeatures(df: DataFrame, features: List[Feature], interval: Duration, eType: String): DataFrame = {
+		println("Begin to extract traffic features...")
 		val minMax = df.agg(min("timestamp"),max("timestamp")).head
 		val minTime = minMax.getDouble(0)
 		val maxTime = minMax.getDouble(1)
@@ -81,34 +88,15 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 
 	/*
 	Returns a DataFrame of final features ready for unsupervised machine learning to be
-	applied from a DataFrame 'df' of raw features. Each feature is normalized and the fields
-	are assembled into a single vector column.
-	*/
-	def getFinalFeatures(df: DataFrame, scaleMode: String = "unit", eType: String): DataFrame = {
-		println("assembling...")
-		val assembler = new VectorAssembler().setInputCols(df.columns.filter(_!=eType)).setOutputCol("features")
-		val assembled = assembler.transform(df).select(eType, "timeinterval", "features")
-		println("scaling...")
-		scaleMode match{
-			case "unit" => {
-				val norm = new Normalizer().setInputCol("features").setOutputCol("scaledFeatures")
-				norm.transform(assembled).drop("features")
-			}
-			case "rescale" => {
-				val scaler = new MinMaxScaler().setInputCol("features").setOutputCol("scaledFeatures")
-				val scalerModel = scaler.fit(assembled)
-				scalerModel.transform(assembled).drop("features")
-			}
-		}
-	}
-
-	/*
-	Returns a DataFrame of final features ready for unsupervised machine learning to be
 	applied from a DataFrame 'df' of raw features. Each feature is normalized and kept as a column.
 	*/
-	def getFinalFeaturesAsColumns(df: DataFrame, scaleMode: String = "unit", eType: String): DataFrame = scaleMode match {
-		case "unit" =>  normalizeToUnit(df, eType)
-		case "rescale" => rescale(df, eType)
+	def getFinalFeaturesAsColumns(df: DataFrame, scaleMode: String = "unit", eType: String): String\/DataFrame = {
+		println("Begin to scale the features...")
+		scaleMode match {
+			case "unit" =>  normalizeToUnit(df, eType).right
+			case "rescale" => rescale(df, eType)
+			case _ => ("Scale mode '"+scaleMode+"' is not recognized.").left
+		}
 	}
 
 	private def normalizeToUnit(df: DataFrame, eType: String): DataFrame = {
@@ -142,39 +130,43 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 		Row.fromSeq(Seq(entity, t) ++ scaled.toSeq)
 	}
 
-	private def rescale(df: DataFrame, eType: String): DataFrame = {
-		val scalesMins = df.dtypes.filter(_._1!=eType).map{case (colName, colType) =>
-			println("Computing max and min for "+colName)
-			val minMax = df.agg(min(colName),max(colName)).head
-			colType match {
-				case "LongType" => {
-					val minVal = minMax.getLong(0).toDouble
-					val maxVal = minMax.getLong(1).toDouble
-					val scale = maxVal-minVal
-					(colName, colType, scale, minVal)
+	private def rescale(df: DataFrame, eType: String): String\/DataFrame = {
+		for{
+			scalesMins <- df.dtypes.filter(_._1!=eType).map{case (colName, colType) =>
+				println("Computing max and min for "+colName)
+				val minMax = df.agg(min(colName),max(colName)).head
+				colType match {
+					case "LongType" => {
+						val minVal = minMax.getLong(0).toDouble
+						val maxVal = minMax.getLong(1).toDouble
+						val scale = maxVal-minVal
+						(colName, colType, scale, minVal).right
+					}
+					case "DoubleType" => {
+						val minVal = minMax.getDouble(0)
+						val maxVal = minMax.getDouble(1)
+						val scale = maxVal-minVal
+						(colName, colType, scale, minVal).right
+					}
+					case _ => ("Unable to rescale with the column data type : "+colType).left
 				}
-				case "DoubleType" => {
-					val minVal = minMax.getDouble(0)
-					val maxVal = minMax.getDouble(1)
-					val scale = maxVal-minVal
-					(colName, colType, scale, minVal)
-				}
-				case _ => throw new Exception("Unable to parse the column data type : "+colType)
-			}
+			}.toList.sequenceU
+		}yield{
+			val scalesMinsB = spark.sparkContext.broadcast(scalesMins)
+			val eTypeB = spark.sparkContext.broadcast(eType)
+			println("Scaling...")
+			val encoder = RowEncoder(df.schema)
+			val dfScaled = df.mapPartitions(iter => {
+				val scalesMins = scalesMinsB.value
+				val eType = eTypeB.value
+				iter.map(r => rescaleRow(r, scalesMins, eType))
+			})(encoder)
+			df.columns.foldLeft(dfScaled){(prevDF, colName) => 
+				prevDF.withColumnRenamed(colName, "scaled"+colName).drop(colName)}
 		}
-		val scalesMinsB = spark.sparkContext.broadcast(scalesMins)
-		val eTypeB = spark.sparkContext.broadcast(eType)
-		println("Scaling...")
-		val scaledRDD = df.rdd.mapPartitions(iter => {
-			val scalesMins = scalesMinsB.value
-			val eType = eTypeB.value
-			iter.map(r => rescaleRow(r, scalesMins, eType))
-		})
-		val dfScaled = df.sqlContext.createDataFrame(scaledRDD , df.schema)
-		df.columns.foldLeft(dfScaled){(prevDF, colName) => prevDF.withColumnRenamed(colName, "scaled"+colName).drop(colName)}
 	}
 
-	private def rescaleRow(row: Row, scalesMins: Array[(String, String, Double, Double)], eType: String):Row = {
+	private def rescaleRow(row: Row, scalesMins: List[(String, String, Double, Double)], eType: String):Row = {
 		val eIndex = row.fieldIndex(eType)
 		val initSeq:Seq[Any] = Seq(row.getString(eIndex))
 		val newSeq = scalesMins.foldLeft(initSeq){case (prevSeq, (colName, colType, scale, minVal)) =>
@@ -199,16 +191,13 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 	*/
 	def extractFeatures(filePath: String, features: List[Feature],
 		extractor: String = "hostsWithIpFallback", interval: Duration,
-		trafficMode: String = "src", scaleMode: String = "unit"): DataFrame = {
-		println("Begin to extract basic features...")
+		trafficMode: String = "src", scaleMode: String = "unit"): String\/DataFrame = {
 		val entity = trafficMode+"entity"
-		val (basic, newFeatures) = extractRawBasicFeatures(filePath, features, extractor, entity)
-		println("Done.")
-		println("Begin to extract traffic features...")
-		val traffic = extractRawTrafficFeatures(basic, newFeatures, interval, entity)
-		println("Done.")
-		println("Begin to scale the features...")
-		getFinalFeaturesAsColumns(traffic, scaleMode, entity)
+		for{
+			(basic, newFeatures) <- extractRawBasicFeatures(filePath, features, extractor, entity)
+			traffic = extractRawTrafficFeatures(basic, newFeatures, interval, entity)
+			res <- getFinalFeaturesAsColumns(traffic, scaleMode, entity)
+		}yield res
 	}
 
 	def writeFeaturesToFile(features: DataFrame, fileName: String):Unit = {

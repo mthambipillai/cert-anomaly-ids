@@ -15,6 +15,11 @@ import config._
 import inspection._
 import detection.Ensembler
 import detection.Detector
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.util.Try
+import scalaz._
+import Scalaz._
 
 object MainIDSApp {
   def main(args: Array[String]) {
@@ -22,42 +27,10 @@ object MainIDSApp {
     val conf = IDSConfig.loadConf(args, "application.conf")
     val spark = SparkSession.builder.appName("MainIDSApp").getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
-   
-    val eval = new Evaluator()
-    //def inject(df: DataFrame):DataFrame = eval
-      //.injectIntrusions(df, IntrusionKind.allKinds.map(ik => (ik,4)), 1496361600902L, 1496447999253L, conf.interval)
-    
-    conf.mode match{
-      case "extract" => {
-        val fe = new FeatureExtractor(spark, df => df)
-        val finalFeatures = fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval,
-          conf.trafficMode, conf.scaleMode)
-        fe.writeFeaturesToFile(finalFeatures, conf.featuresFile)
-      }
-      case "detect" => {
-        val featuresFile = conf.featuresFile+".parquet"
-        println("Reading features from "+featuresFile+"...")
-        val features = spark.read.parquet(featuresFile)
-        features.cache()
-        val en = new Ensembler()
-        val detectors = Detector.getDetectors(spark, conf, features)
-        val anomalies = en.detectAndCombine(conf.trafficMode,conf.ensembleMode, conf.threshold, detectors)
-        features.unpersist()
-        eval.evaluateResults(anomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)
-      }
-      case "inspect" => {
-        val ins = new Inspector(spark)
-        ins.inspect(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, conf.topAnomalies,
-          conf.anomalyIndex,  conf.trafficMode, conf.interval)
-      }
-      case "inspectall" => {
-        val ins = new Inspector(spark)
-        ins.inspectAll(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, 
-          conf.trafficMode, conf.interval, conf.inspectionResults)
-      }
-      case _ => println("Invalid command.")
-    }
 
+    val res = new Dispatcher(spark, conf).dispatch(conf.mode)
+    res.leftMap(s => println("Error: "+s))
+    
     spark.stop()
     val t1 = System.nanoTime()
     println("Elapsed time: " + (((t1 - t0)/1000000000.0)/60.0) + "min")

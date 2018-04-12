@@ -7,6 +7,11 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 import detection.Detector
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.concurrent.Await
+import scala.util.{Try,Success,Failure}
+import scala.concurrent.duration._
 
 /*
 This detector implements the algorithm described in "Liu, Ting and Zhou. Isolation Forest" (1).
@@ -29,24 +34,27 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTr
 		res
 	}
 	private val samples = (1 to nbTrees).map(i => (i, data.sample(true, 0.1).limit(trainSize)))
-	private val trees = samples.map{case (i,s) => {
-		val train = s.collect()
-		val columnsHelpers = schema.map{ case (colName, colType, index) => 
-			val (minVal, maxVal) = colType match{
-				case "LongType" => {
-					val trainVals = train.map(r => r.getLong(index))
-					(trainVals.min, trainVals.max)
+	private val trees = {
+		val r = Future.traverse(samples.toList)({case (i,s) => Future{
+			val train = s.collect()
+			val columnsHelpers = schema.map{ case (colName, colType, index) => 
+				val (minVal, maxVal) = colType match{
+					case "LongType" => {
+						val trainVals = train.map(r => r.getLong(index))
+						(trainVals.min, trainVals.max)
+					}
+					case "DoubleType" => {
+						val trainVals = train.map(r => r.getDouble(index))
+						(trainVals.min, trainVals.max)
+					}
 				}
-				case "DoubleType" => {
-					val trainVals = train.map(r => r.getDouble(index))
-					(trainVals.min, trainVals.max)
-				}
-			}
-			ColumnHelper(colName, colType, index, minVal, maxVal)
-		}.toList
-		println("Building iTree nb "+i+"...")
-		IsolationTree(columnsHelpers, train, limit)
-	}}
+				ColumnHelper(colName, colType, index, minVal, maxVal)
+			}.toList
+			println("Building iTree nb "+i+"...")
+			IsolationTree(columnsHelpers, train, limit)
+		}})
+    	Await.result(r, Duration.Inf)
+	}
 
 	/*
 	Maps to a score in range [0,1] as explained in section 2 of (1).
@@ -63,7 +71,11 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTr
 		println("Computing path lengths...")
 		val newSchema = data.schema.add(StructField("pathlengthacc", DoubleType, true))
 		val encoder = RowEncoder(newSchema)
-		val sumDF = data.mapPartitions(sumPathLength)(encoder)
+		val treesB = spark.sparkContext.broadcast(trees)
+		val sumDF = data.mapPartitions(iter => {
+			val trees = treesB.value
+			sumPathLength(trees, iter)
+		})(encoder)
 		println("Computing scores from path lengths...")
 		val anomalies = sumDF.filter(col("pathlengthacc").leq(lit(pathLengthThreshold)))
 		val res = anomalies.withColumn("if_score", scoreUDF(lc)(col("pathlengthacc"))).drop("pathlengthacc")
@@ -74,7 +86,7 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTr
 	/*
 	Computes for every Row in 'rows' the sum of the path lengths from every IsolationTree in this IsolationForest. 
 	*/
-	private def sumPathLength(rows: Iterator[Row]):Iterator[Row] = {
+	private def sumPathLength(trees: List[IsolationTree], rows: Iterator[Row]):Iterator[Row] = {
 		if(rows.isEmpty) return rows
 		val rowsSeq = rows.toSeq
 		val allLengths = trees.map(t => t.pathLength(schema, rowsSeq, 0)).filter(seq => !seq.isEmpty)

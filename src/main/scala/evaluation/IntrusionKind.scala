@@ -5,6 +5,8 @@ import org.apache.spark.sql.Row
 import scala.util.Random
 import scala.math.abs
 import org.apache.spark.sql.functions._
+import scalaz._
+import Scalaz._
 
 case class IntrusionKind(
 	val name: String,
@@ -12,12 +14,12 @@ case class IntrusionKind(
 	val requiredColumns: List[String],
 	private val injectAux: (DataFrame, String, Long, Long) => DataFrame
 ){
-	def inject(df: DataFrame, columns: List[String], src: String, minTimestamp: Long, maxTimestamp: Long): DataFrame = {
+	def inject(df: DataFrame, columns: List[String], src: String, minTimestamp: Long, maxTimestamp: Long): String\/DataFrame = {
 		if(requiredColumns.forall(c => columns.contains(c))){
 			val newRows = injectAux(df, src, minTimestamp, maxTimestamp).select(columns.head, columns.tail: _*)
-			df.union(newRows)
+			df.union(newRows).right
 		}else{
-			throw new Exception("Not all required columns are present.")
+			("Not all required columns are present. Need : "+requiredColumns.mkString(", ")+".").left
 		}
 	}
 

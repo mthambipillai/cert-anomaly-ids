@@ -10,20 +10,28 @@ import java.io._
 import au.com.bytecode.opencsv.CSVWriter
 import scala.collection.mutable.ListBuffer
 import org.apache.spark.sql.SaveMode
+import scalaz._
+import Scalaz._
 
 class Evaluator() extends Serializable{
 	private val r = new Random(System.currentTimeMillis())
 	private var intrusions:List[Intrusion] = Nil
 
 	def injectIntrusions(df: DataFrame, intrusionKinds: List[(IntrusionKind, Int)],
-		minTimestamp: Long, maxTimestamp: Long, intrusionTime: Duration):DataFrame = {
+		minTimestamp: Long, maxTimestamp: Long, intrusionTime: Duration):String\/DataFrame = {
 		val maxBeginIntrusionTime = maxTimestamp - intrusionTime.toMillis
 		val allIntrusions = intrusionKinds.flatMap{case (intrusionKind, nbOccurences) =>
 			(1 to nbOccurences).map(i => 
 				generateIntrusion(intrusionKind, minTimestamp, maxBeginIntrusionTime, intrusionTime))}
 		this.intrusions = allIntrusions
 		val cols = df.columns.toList
-		allIntrusions.foldLeft(df){ (previousdf, intrusion) => intrusion.inject(previousdf, cols)}
+		val dfr:String\/DataFrame = df.right
+		allIntrusions.foldLeft(dfr){ (previousdfDisj, intrusion) => 
+			for{
+				previousdf <- previousdfDisj
+				nextdf <- intrusion.inject(previousdf, cols)
+			}yield nextdf
+		}
 	}
 
 	def evaluateResults(detected: DataFrame, trafficMode: String = "src", nbTop: Int, destFile: String):Unit={

@@ -26,7 +26,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig){
 	def dispatch(command: String):String\/Unit= command match{
 		case "extract" => handleExtract
 		case "detect" => handleDetect
-		case "inspectall" => handleInspect
+		case "inspect" => handleInspect
 		case _ => ("Invalid command '"+conf.mode+"'.").left
 	}
 
@@ -60,5 +60,4 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig){
 		ins.inspectAll(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, 
 			conf.trafficMode, conf.interval, conf.rules, conf.inspectionResults)
 	}
-
 }

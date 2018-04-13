@@ -71,14 +71,6 @@ object IDSConfig{
             c.copy(ensembleMode = x) ).text("Determines how detectors' scores are combined. mean or max.")
         )
       cmd("inspect").action( (_, c) => c.copy(mode = "inspect") ).
-        text("Inspect the logs for a specific already detected anomaly.").
-        children(
-          opt[String]('a', "anomaliesfile").action( (x, c) =>
-            c.copy(anomaliesFile = x) ).text("CSV file to read the detected anomalies from."),
-          opt[Int]('i', "anomalyindex").action( (x, c) =>
-            c.copy(anomalyIndex = x) ).text("Index in the anomalies file of the anomaly that will be inspected.")
-        )
-      cmd("inspectall").action( (_, c) => c.copy(mode = "inspectall") ).
         text("Inspects all the logs for every anomaly detected.").
         children(
           opt[String]('a', "anomaliesfile").action( (x, c) =>

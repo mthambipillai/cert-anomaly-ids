@@ -28,7 +28,7 @@ abstract class Rule(
 }
 
 object Rule{
-	private def makeRule[T](fieldName: String, nullFallBack: T,
+	def makeRule[T](fieldName: String, nullFallBack: T,
 		rowF: (Row, Int) => T, checkF: T => Boolean, commentText: String):SimpleRule = SimpleRule((schema, rows) => {
 		val index = schema.fieldIndex(fieldName)
 		val tags = rows.map(r => {
@@ -41,40 +41,4 @@ object Rule{
 			(tag1 || tag2, comment1:::comment2)
 		}
 	})
-
-	val nbAttemptsSSH = makeRule[Int]("auth_attempts", 4, _.getInt(_), _>=4, "high/unknown nb attempts")
-	val dstPortSSH = makeRule[Int]("dstport", -1, _.getInt(_), _!=22, "dst port not 22")
-	val versionSSH = makeRule[Int]("version", -1, _.getInt(_), _<2, "version less than 2.x")
-	val maliciousSrcIP = makeRule[String]("srcip", "", _.getString(_), {
-		val maliciousIPs = Source.fromFile("knownips.txt").getLines.toList
-		maliciousIPs.contains(_)}, "known malicious ip")
-	val unusualDstHostSSH = makeRule[String]("dsthost", "null", _.getString(_), {
-		val dsthosts = Source.fromFile("dsthoststats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
-		!dsthosts.contains(_)}, "unusual dsthost")
-	val unusualClientSSH = makeRule[String]("client", "null", _.getString(_), {
-		val clients = Source.fromFile("clientstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
-		!clients.contains(_)}, "unusual client")
-	val unusualServerSSH = makeRule[String]("server", "null", _.getString(_), {
-		val servers = Source.fromFile("serverstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
-		!servers.contains(_)}, "unusual server")
-	val unusualCipherSSH = makeRule[String]("cipher_alg", "null", _.getString(_), {
-		val ciphers = Source.fromFile("cipher_algstats.txt").getLines.toList.map(_.split("""\|\|\|""")(0))
-		!ciphers.contains(_)}, "unusual cipher")
-
-	val totalNbAttemptsSSH = ComplexRule("totalNbAttemptsSSH", (schema, rows, acc) => {
-		val index = schema.fieldIndex("auth_attempts")
-		val comments = rows.map{ r =>
-			val nbAttempts = if(r.isNullAt(index)) 0 else r.getInt(index)
-			acc.add(nbAttempts)
-			""
-		}
-		if(acc.value>=30){
-			(true, "high total nb of attempts"::comments.tail)
-		}else{
-			(false, comments)
-		}
-	})
-
-	val BroSSHRules = List(totalNbAttemptsSSH, nbAttemptsSSH, dstPortSSH, versionSSH,
-		unusualDstHostSSH, maliciousSrcIP, unusualClientSSH, unusualServerSSH, unusualCipherSSH)
 }

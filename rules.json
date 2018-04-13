@@ -1,0 +1,41 @@
+{
+  "name" : "BroSSHrules",
+  "rules" : [ {
+    "name" : "ssh_auth_attempts",
+    "params" : ["4"],
+    "text" : "high/unknown nb attempts"
+  }, {
+    "name" : "ssh_dstport",
+    "params" : [],
+    "text" : "dst port not 22"
+  }, {
+    "name" : "ssh_version",
+    "params" : ["2"],
+    "text" : "version less than 2.x"
+  }, {
+    "name" : "ssh_srcip",
+    "params" : ["knownips.txt"],
+    "text" : "known malicious ip"
+  }, {
+    "name" : "ssh_dsthost",
+    "params" : ["dsthoststats.txt"],
+    "text" : "unusual dsthost"
+  }, {
+    "name" : "ssh_client",
+    "params" : ["clientstats.txt"],
+    "text" : "unusual client"
+  }, {
+    "name" : "ssh_server",
+    "params" : ["serverstats.txt"],
+    "text" : "unusual server"
+  }, {
+    "name" : "ssh_cipher",
+    "params" : ["cipher_algstats.txt"],
+    "text" : "unusual cipher"
+  }, {
+    "name" : "ssh_total_auth_attempts",
+    "params" : ["30"],
+    "text" : "high total nb of attempts"
+  }]
+}
+

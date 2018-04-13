@@ -58,7 +58,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig){
 	private def handleInspect():String\/Unit = {
 		val ins = new Inspector(spark)
 		ins.inspectAll(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, 
-			conf.trafficMode, conf.interval, conf.inspectionResults)
+			conf.trafficMode, conf.interval, conf.rules, conf.inspectionResults)
 	}
 
 }

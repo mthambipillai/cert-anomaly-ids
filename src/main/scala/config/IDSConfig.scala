@@ -4,6 +4,8 @@ import com.typesafe.config.{ Config, ConfigFactory }
 import features.Feature
 import features.FeaturesParser
 import scala.concurrent.duration._
+import inspection.Rule
+import inspection.RulesParser
 
 case class IDSConfig(
   //Global parameters
@@ -21,6 +23,7 @@ case class IDSConfig(
 	val topAnomalies: Int,
 	val anomaliesFile: String,
 	val anomalyIndex: Int,
+  val rules: List[Rule],
   val inspectionResults: String,
   //IsolationForest parameters
   val isolationForest: IsolationForestConfig,
@@ -31,9 +34,8 @@ case class IDSConfig(
 object IDSConfig{
 	val parser = new scopt.OptionParser[IDSConfig]("ids") {
       head("ids", "1.0")
-      opt[String]('b', "brosource").action( (x, c) =>
-        c.copy(features = FeaturesParser.parse(x)) ).text("Source of features from Bro. Default is BroSSH.").validate(x => 
-        if(x=="BroSSH" || x=="BroConn") success else failure("Invalid parameter value"))
+      opt[String]('f', "features").action( (x, c) =>
+        c.copy(features = FeaturesParser.parse(x)) ).text("Source of features.")
       opt[String]('e', "extractor").action( (x, c) =>
         c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
       opt[Duration]('i', "interval").action( (x, c) =>
@@ -81,7 +83,9 @@ object IDSConfig{
         children(
           opt[String]('a', "anomaliesfile").action( (x, c) =>
             c.copy(anomaliesFile = x) ).text("CSV file to read the detected anomalies from."),
-          opt[String]('r', "resultsfile").action( (x, c) =>
+          opt[String]('r', "rules").action( (x, c) =>
+            c.copy(rules = RulesParser.parse(x)) ).text("Source of rules."),
+          opt[String]('i', "inspectionresultsfile").action( (x, c) =>
             c.copy(inspectionResults = x) ).text("CSV file to write the results of the inspection.")
         )
     }
@@ -101,11 +105,13 @@ object IDSConfig{
 		val topAnomalies = config.getInt("nbtopanomalies")
 		val anomaliesFile = config.getString("anomaliesfile")
 		val anomalyIndex = config.getInt("anomalyindex")
+    val rules = RulesParser.parse(config.getString("rules"))
     val inspectionResults = config.getString("resultsfile")
     val isolationForest = IsolationForestConfig.load(config)
     val kMeans = KMeansConfig.load(config)
 		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode, ensembleMode,
-			featuresFile, detectors, threshold, topAnomalies, anomaliesFile, anomalyIndex, inspectionResults, isolationForest, kMeans)
+			featuresFile, detectors, threshold, topAnomalies, anomaliesFile, anomalyIndex, rules, inspectionResults,
+      isolationForest, kMeans)
 
 		parser.parse(args, fromFile).getOrElse{
 			System.exit(1)

@@ -5,42 +5,52 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import org.apache.spark.sql.Column
+import scala.util.Try
+import scalaz._
+import Scalaz._
 
 object FeaturesParser{
 
-	def parse(fileName: String):List[Feature] = {
-		val json = Source.fromFile(fileName)
-		val mapper = new ObjectMapper() with ScalaObjectMapper
-		mapper.registerModule(DefaultScalaModule)
-		val parsedJson = mapper.readValue[Map[String, Object]](json.reader())
-		val featuresListMaps = parsedJson("features").asInstanceOf[List[Map[String,Object]]]
-		featuresListMaps.map{f =>
-			val name = f("name").asInstanceOf[String]
-			val parent = getParent(f("parent").asInstanceOf[String])
-			val parser = getParseFunction(f("type").asInstanceOf[String])
-			val doc = f("doc").asInstanceOf[String]
-			val aggs = f("aggs").asInstanceOf[List[String]]
-			Feature(name, parent, doc, parser, aggs.map(getAggFunction))
-		}
+	def parse(fileName: String):String\/List[Feature] = {
+		for{
+			json <- Try(scala.io.Source.fromFile(fileName)).toDisjunction.leftMap(e => e.getMessage)
+        	mapper = new ObjectMapper() with ScalaObjectMapper
+        	_ = mapper.registerModule(DefaultScalaModule)
+        	parsedJson <- Try(mapper.readValue[Map[String, Object]](json.reader()))
+        		.toDisjunction.leftMap(e => "Could not parse json from '"+fileName+"' : "+e.getMessage)
+        	featuresListMaps = parsedJson("features").asInstanceOf[List[Map[String,Object]]]
+        	res <- featuresListMaps.traverseU{f =>
+				val name = f("name").asInstanceOf[String]
+				val parent = getParent(f("parent").asInstanceOf[String])
+				for{
+					parser <- getParseFunction(f("type").asInstanceOf[String])
+					doc = f("doc").asInstanceOf[String]
+					aggs = f("aggs").asInstanceOf[List[String]]
+					aggsF <- aggs.traverseU(getAggFunction)
+				}yield Feature(name, parent, doc, parser, aggsF)
+			}
+		}yield res
 	}
 
-	private def getParseFunction(fType: String):(DataFrame,String) => DataFrame = fType match {
-		case "Boolean" => Feature.parseBooleanCol
-		case "Int" => Feature.parseIntCol
-		case "String" => Feature.parseStringCol
-		case "Long" => Feature.parseLongCol
-		case "Host" => Feature.parseHostCol
-		case "Day" => Feature.parseDayCol
-		case "Hour" => Feature.parseHourCol
+	private def getParseFunction(fType: String):String\/((DataFrame,String) => DataFrame) = fType match {
+		case "Boolean" => (Feature.parseBooleanCol _).right
+		case "Int" => (Feature.parseIntCol _).right
+		case "String" => (Feature.parseStringCol _).right
+		case "Long" => (Feature.parseLongCol _).right
+		case "Host" => (Feature.parseHostCol _).right
+		case "Day" => (Feature.parseDayCol _).right
+		case "Hour" => (Feature.parseHourCol _).right
+		case t => ("Unknown type '"+t+"' for parsing feature.").left
 	}
 
-	private def getAggFunction(agg: String):String => Column = agg match {
-		case "mostcommon" => Feature.mostCommonValueF
-		case "countdistinct" => Feature.countDistinctF
-		case "mean" => Feature.meanF
-		case "sum" => Feature.sumF
-		case "max" => Feature.maxF
-		case "min" => Feature.minF
+	private def getAggFunction(agg: String):String\/(String => Column) = agg match {
+		case "mostcommon" => (Feature.mostCommonValueF _).right
+		case "countdistinct" => (Feature.countDistinctF _).right
+		case "mean" => (Feature.meanF _).right
+		case "sum" => (Feature.sumF _).right
+		case "max" => (Feature.maxF _).right
+		case "min" => (Feature.minF _).right
+		case a => ("Unknown aggregation function '"+a+"' for parsing feature.").left
 	}
 
 	private def getParent(parent: String):Option[String] = parent match{

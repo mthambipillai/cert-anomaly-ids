@@ -24,13 +24,14 @@ import Scalaz._
 object MainIDSApp {
   def main(args: Array[String]) {
     val t0 = System.nanoTime()
-    val conf = IDSConfig.loadConf(args, "application.conf")
     val spark = SparkSession.builder.appName("MainIDSApp").getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
+    val finalRes = for{
+      conf <- IDSConfig.loadConf(args, "application.conf")
+      res <- new Dispatcher(spark, conf).dispatch(conf.mode)
+    }yield res
+    finalRes.leftMap(s => println("Error: "+s))
 
-    val res = new Dispatcher(spark, conf).dispatch(conf.mode)
-    res.leftMap(s => println("Error: "+s))
-    
     spark.stop()
     val t1 = System.nanoTime()
     println("Elapsed time: " + (((t1 - t0)/1000000000.0)/60.0) + "min")

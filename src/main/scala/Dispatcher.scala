@@ -33,7 +33,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig){
 	private def handleExtract():String\/Unit = {
 		val fe = new FeatureExtractor(spark, df => df)
 		for(
-			finalFeatures <- fe.extractFeatures(conf.filePath, conf.features, conf.extractor, conf.interval,
+			finalFeatures <- fe.extractFeatures(conf.filePath, conf.featuresschema, conf.extractor, conf.interval,
 				conf.trafficMode, conf.scaleMode)
 		)yield{
 			fe.writeFeaturesToFile(finalFeatures, conf.featuresFile)
@@ -57,7 +57,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig){
 
 	private def handleInspect():String\/Unit = {
 		val ins = new Inspector(spark)
-		ins.inspectAll(conf.filePath, conf.features, conf.extractor, conf.anomaliesFile, 
+		ins.inspectAll(conf.filePath, conf.featuresschema, conf.extractor, conf.anomaliesFile, 
 			conf.trafficMode, conf.interval, conf.rules, conf.inspectionResults)
 	}
 }

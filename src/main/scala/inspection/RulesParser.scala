@@ -3,20 +3,27 @@ import scala.io._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
+import scala.util.Try
+import scalaz._
+import Scalaz._
 
 object RulesParser{
 	
-	def parse(fileName: String):List[Rule] = {
-		val json = Source.fromFile(fileName)
-		val mapper = new ObjectMapper() with ScalaObjectMapper
-		mapper.registerModule(DefaultScalaModule)
-		val parsedJson = mapper.readValue[Map[String, Object]](json.reader())
-		val rulesListMaps = parsedJson("rules").asInstanceOf[List[Map[String,Object]]]
-		rulesListMaps.map{r =>
-			val name = r("name").asInstanceOf[String]
-			val params = r("params").asInstanceOf[List[String]]
-			val text = r("text").asInstanceOf[String]
-			getRule(name, params, text)
+	def parse(fileName: String):String\/List[Rule] = {
+		for{
+			json <- Try(scala.io.Source.fromFile(fileName)).toDisjunction.leftMap(e => e.getMessage)
+			mapper = new ObjectMapper() with ScalaObjectMapper
+			_ = mapper.registerModule(DefaultScalaModule)
+			parsedJson <- Try(mapper.readValue[Map[String, Object]](json.reader()))
+				.toDisjunction.leftMap(e => "Could not parse json '"+fileName+"'"+e.getMessage)
+			rulesListMaps = parsedJson("rules").asInstanceOf[List[Map[String,Object]]]
+		}yield{
+			rulesListMaps.map{r =>
+				val name = r("name").asInstanceOf[String]
+				val params = r("params").asInstanceOf[List[String]]
+				val text = r("text").asInstanceOf[String]
+				getRule(name, params, text)
+			}
 		}
 	}
 

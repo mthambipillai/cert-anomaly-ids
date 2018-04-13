@@ -6,12 +6,15 @@ import features.FeaturesParser
 import scala.concurrent.duration._
 import inspection.Rule
 import inspection.RulesParser
+import scala.util.Try
+import scalaz._
+import Scalaz._
 
 case class IDSConfig(
   //Global parameters
 	val mode: String,
 	val filePath: String,
-	val features: List[Feature],
+	val featuresschema: List[Feature],
 	val extractor: String,
 	val interval: Duration,
 	val trafficMode: String,
@@ -22,7 +25,6 @@ case class IDSConfig(
 	val threshold: Double,
 	val topAnomalies: Int,
 	val anomaliesFile: String,
-	val anomalyIndex: Int,
   val rules: List[Rule],
   val inspectionResults: String,
   //IsolationForest parameters
@@ -34,8 +36,8 @@ case class IDSConfig(
 object IDSConfig{
 	val parser = new scopt.OptionParser[IDSConfig]("ids") {
       head("ids", "1.0")
-      opt[String]('f', "features").action( (x, c) =>
-        c.copy(features = FeaturesParser.parse(x)) ).text("Source of features.")
+      opt[String]('f', "featuresschema").action( (x, c) =>
+        c.copy(featuresschema = FeaturesParser.parse(x).getOrElse(Nil)) ).text("Source of features.")
       opt[String]('e', "extractor").action( (x, c) =>
         c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
       opt[Duration]('i', "interval").action( (x, c) =>
@@ -62,9 +64,14 @@ object IDSConfig{
           opt[String]('d', "detectors").action( (x, c) =>
             c.copy(detectors = x) ).text("Detectors to use. Names separated by commas."),
           opt[Double]('t', "threshold").action( (x, c) =>
-            c.copy(threshold = x) ).text("Threshold between 0.0 and 1.0 above which logs are considered as anomalies."),
+            c.copy(threshold = x) )
+            .text("Threshold between 0.0 and 1.0 above which logs are considered as anomalies.").validate( x => {
+              if(x>=0.0 && x<=1.0) success else failure("Value must be between 0.0 and 1.0.")
+            }),
           opt[Int]('n', "nbtopanomalies").action( (x, c) =>
-            c.copy(topAnomalies = x) ).text("Number of top anomalies to store."),
+            c.copy(topAnomalies = x) ).text("Number of top anomalies to store.").validate( x => {
+              if(x>0 && x<=1000) success else failure("Value must be between 1 and 1000.")
+            }),
           opt[String]('a', "anomaliesfile").action( (x, c) =>
             c.copy(anomaliesFile = x) ).text("CSV file to write the detected anomalies to."),
           opt[String]('e', "ensemblemode").action( (x, c) =>
@@ -76,38 +83,43 @@ object IDSConfig{
           opt[String]('a', "anomaliesfile").action( (x, c) =>
             c.copy(anomaliesFile = x) ).text("CSV file to read the detected anomalies from."),
           opt[String]('r', "rules").action( (x, c) =>
-            c.copy(rules = RulesParser.parse(x)) ).text("Source of rules."),
+            c.copy(rules = RulesParser.parse(x).getOrElse(Nil)) ).text("Source of rules."),
           opt[String]('i', "inspectionresultsfile").action( (x, c) =>
             c.copy(inspectionResults = x) ).text("CSV file to write the results of the inspection.")
         )
     }
-	def loadConf(args: Array[String], confFile: String):IDSConfig = {
-		val config = ConfigFactory.parseFile(new File(confFile))
-		val mode = config.getString("mode")
-		val filePath = config.getString("logspath")
-		val features = FeaturesParser.parse(config.getString("features"))
-		val extractor = config.getString("extractor")
-		val interval = Duration(config.getString("aggregationtime"))
-		val trafficMode = config.getString("trafficmode")
-		val scaleMode = config.getString("scalemode")
-    val ensembleMode = config.getString("ensemblemode")
-		val featuresFile = config.getString("featuresfile")
-    val detectors = config.getString("detectors")
-		val threshold = config.getDouble("threshold")
-		val topAnomalies = config.getInt("nbtopanomalies")
-		val anomaliesFile = config.getString("anomaliesfile")
-		val anomalyIndex = config.getInt("anomalyindex")
-    val rules = RulesParser.parse(config.getString("rules"))
-    val inspectionResults = config.getString("resultsfile")
-    val isolationForest = IsolationForestConfig.load(config)
-    val kMeans = KMeansConfig.load(config)
-		val fromFile = IDSConfig(mode, filePath, features, extractor, interval, trafficMode, scaleMode, ensembleMode,
-			featuresFile, detectors, threshold, topAnomalies, anomaliesFile, anomalyIndex, rules, inspectionResults,
-      isolationForest, kMeans)
+	def loadConf(args: Array[String], confFile: String):String\/IDSConfig = {
+    for{
+      config <- Try(ConfigFactory.parseFile(new File(confFile))).toDisjunction.leftMap(e =>
+        "Could not parse '"+confFile+"' because of "+e.getMessage)
+      mode = config.getString("mode")
+      filePath = config.getString("logspath")
+      featuresschema <- FeaturesParser.parse(config.getString("featuresschema"))
+      extractor = config.getString("extractor")
+      interval <- Try(Duration(config.getString("aggregationtime"))).toDisjunction.leftMap(e =>
+        "Could not parse duration because of "+e.getMessage)
+      trafficMode = config.getString("trafficmode")
+      scaleMode = config.getString("scalemode")
+      ensembleMode = config.getString("ensemblemode")
+      featuresFile = config.getString("featuresfile")
+      detectors = config.getString("detectors")
+      threshold <- Try(config.getDouble("threshold")).toDisjunction.leftMap(e =>
+        "Could not parse double for 'threshold'")
+      trafficMode = config.getString("trafficmode")
+      topAnomalies <- Try(config.getInt("nbtopanomalies")).toDisjunction.leftMap(e =>
+        "Could not parse int for 'topAnomalies'")
+      anomaliesFile = config.getString("anomaliesfile")
+      rules <- RulesParser.parse(config.getString("rules"))
+      inspectionResults = config.getString("resultsfile")
+      isolationForest = IsolationForestConfig.load(config)
+      kMeans = KMeansConfig.load(config)
 
-		parser.parse(args, fromFile).getOrElse{
-			System.exit(1)
-			fromFile
-		}
+      fromFile = IDSConfig(mode, filePath, featuresschema, extractor, interval, trafficMode, scaleMode, ensembleMode,
+        featuresFile, detectors, threshold, topAnomalies, anomaliesFile, rules, inspectionResults,
+        isolationForest, kMeans)
+      res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
+      checkFeatures <- if(res.featuresschema.isEmpty) "Could not parse features.".left else res.right
+      checkRules <- if(checkFeatures.rules.isEmpty) "Could not parse rules.".left else checkFeatures.right
+    }yield checkRules
 	}
 }

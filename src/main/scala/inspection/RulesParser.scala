@@ -23,44 +23,34 @@ object RulesParser{
 	private def getRule(name: String, params: List[String], text: String): Rule = name match{
 		case "ssh_auth_attempts" => {
 			val nbAttempts = params.head.toInt
-			Rule.makeRule[Int]("auth_attempts", nbAttempts, _.getInt(_), _>=nbAttempts, text)
+			SimpleRule.makeSimpleRule[Int]("auth_attempts", nbAttempts, _.getInt(_), _>=nbAttempts, text)
 		}
 		case "ssh_dstport" => {
-			Rule.makeRule[Int]("dstport", -1, _.getInt(_), _!=22, text)
+			SimpleRule.makeSimpleRule[Int]("dstport", -1, _.getInt(_), _!=22, text)
 		}
 		case "ssh_version" => {
 			val version = params.head.toInt
-			Rule.makeRule[Int]("version", -1, _.getInt(_), _< version, text)
+			SimpleRule.makeSimpleRule[Int]("version", -1, _.getInt(_), _< version, text)
 		}
 		case "ssh_srcip" => {
 			val knownipsFileName = params.head
-			Rule.makeRule[String]("srcip", "", _.getString(_), {
-				val maliciousIPs = Source.fromFile(knownipsFileName).getLines.toList
-				maliciousIPs.contains(_)}, text)
+			SimpleRule.makeFileContainsRule(knownipsFileName, "srcip", "", text)
 		}
 		case "ssh_dsthost" => {
 			val dsthostsFileName = params.head
-			Rule.makeRule[String]("dsthost", "null", _.getString(_), {
-				val dsthosts = Source.fromFile(dsthostsFileName).getLines.toList.map(_.split("""\|\|\|""")(0))
-				!dsthosts.contains(_)}, text)
+			SimpleRule.makeFileNotContainsRule(dsthostsFileName, "dsthost", "null", text)
 		}
 		case "ssh_client" => {
 			val clientsFileName = params.head
-			Rule.makeRule[String]("client", "null", _.getString(_), {
-				val clients = Source.fromFile(clientsFileName).getLines.toList.map(_.split("""\|\|\|""")(0))
-				!clients.contains(_)}, text)
+			SimpleRule.makeFileNotContainsRule(clientsFileName, "client", "null", text)
 		}
 		case "ssh_server" => {
 			val serversFileName = params.head
-			Rule.makeRule[String]("server", "null", _.getString(_), {
-				val servers = Source.fromFile(serversFileName).getLines.toList.map(_.split("""\|\|\|""")(0))
-				!servers.contains(_)}, text)
+			SimpleRule.makeFileNotContainsRule(serversFileName, "server", "null", text)
 		}
 		case "ssh_cipher" => {
 			val ciphersFileName = params.head
-			Rule.makeRule[String]("cipher_alg", "null", _.getString(_), {
-				val ciphers = Source.fromFile(ciphersFileName).getLines.toList.map(_.split("""\|\|\|""")(0))
-				!ciphers.contains(_)}, text)
+			SimpleRule.makeFileNotContainsRule(ciphersFileName, "cipher_alg", "null", text)
 		}
 		case "ssh_total_auth_attempts" => {
 			val totalNbAttempts = params.head.toInt

@@ -26,19 +26,3 @@ abstract class Rule(
 		(isAnomaly, newRows)
 	}
 }
-
-object Rule{
-	def makeRule[T](fieldName: String, nullFallBack: T,
-		rowF: (Row, Int) => T, checkF: T => Boolean, commentText: String):SimpleRule = SimpleRule((schema, rows) => {
-		val index = schema.fieldIndex(fieldName)
-		val tags = rows.map(r => {
-			val v = if(r.isNullAt(index)) nullFallBack else rowF(r, index)
-			val check = checkF(v)
-			val comment = if(check) commentText else ""
-			(check, List(comment))
-		})
-		tags.tail.foldLeft(tags.head){case ((tag1,comment1),(tag2, comment2)) => 
-			(tag1 || tag2, comment1:::comment2)
-		}
-	})
-}

@@ -41,7 +41,7 @@ object IntrusionKind{
 
 	private def timeUDF(r: Random, min: Long, max: Long) = udf((t: Long) => (r.nextDouble()*(max-min)).toLong+min)
 
-	val tooManyAuthAttempts = IntrusionKind("tooManyAuthAttempts", "The src entity tried to authenticate an unusual number of times to the same dst",
+	def tooManyAuthAttempts(doc: String) = IntrusionKind("tooManyAuthAttempts", doc,
 		List("auth_attempts", "srchost"), (df, src, minTimestamp, maxTimestamp) => {
 			val nbAttempts = 200
 			val res = df.sample(true, 0.01).limit(50)
@@ -53,5 +53,5 @@ object IntrusionKind{
 			res
 	})
 
-	val allKinds = List(tooManyAuthAttempts)
+	val allKinds = List()
 }

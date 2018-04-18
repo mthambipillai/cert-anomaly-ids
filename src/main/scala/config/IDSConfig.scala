@@ -6,6 +6,8 @@ import features.FeaturesParser
 import scala.concurrent.duration._
 import inspection.Rule
 import inspection.RulesParser
+import evaluation.IntrusionKind
+import evaluation.IntrusionsParser
 import scala.util.Try
 import scalaz._
 import Scalaz._
@@ -27,6 +29,7 @@ case class IDSConfig(
 	val anomaliesFile: String,
   val rules: List[Rule],
   val inspectionResults: String,
+  val intrusions: List[(IntrusionKind,Int)],
   val intrusionsDir: String,
   //IsolationForest parameters
   val isolationForest: IsolationForestConfig,
@@ -56,7 +59,9 @@ object IDSConfig{
             c.copy(scaleMode = x) ).text("How to scale the features. Can be either unit or rescale."),
           opt[String]('f', "featuresfile").action( (x, c) =>
             c.copy(featuresFile = x) ).text("Parquet file to write the scaled features to."),
-          opt[String]('i', "intrusionsdir").action( (x, c) =>
+          opt[String]('i', "intrusions").action( (x, c) =>
+            c.copy(intrusions = IntrusionsParser.parse(x).getOrElse(Nil)) ).text("Source of intrusions."),
+          opt[String]('d', "intrusionsdir").action( (x, c) =>
             c.copy(intrusionsDir = x) ).text("Folder to write the injected intrusions to.")
         )
       cmd("detect").action( (_, c) => c.copy(mode = "detect") ).
@@ -116,13 +121,14 @@ object IDSConfig{
       anomaliesFile = config.getString("anomaliesfile")
       rules <- RulesParser.parse(config.getString("rules"))
       inspectionResults = config.getString("resultsfile")
+      intrusions <- IntrusionsParser.parse(config.getString("intrusions"))
       intrusionsDir = config.getString("intrusionsdir")
       isolationForest = IsolationForestConfig.load(config)
       kMeans = KMeansConfig.load(config)
 
-      fromFile = IDSConfig(mode, filePath, featuresschema, extractor, interval, trafficMode, scaleMode, ensembleMode,
-        featuresFile, detectors, threshold, topAnomalies, anomaliesFile, rules, inspectionResults, intrusionsDir,
-        isolationForest, kMeans)
+      fromFile = IDSConfig(mode, filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
+        ensembleMode, featuresFile, detectors, threshold, topAnomalies, anomaliesFile, rules, inspectionResults,
+        intrusions, intrusionsDir, isolationForest, kMeans)
       res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
       checkFeatures <- if(res.featuresschema.isEmpty) "Could not parse features.".left else res.right
       checkRules <- if(checkFeatures.rules.isEmpty) "Could not parse rules.".left else checkFeatures.right

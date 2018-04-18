@@ -33,8 +33,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 	private def handleExtract():String\/Unit = {
 		val eval = new Evaluator(spark)
 		def inject(min: Long, max: Long, df: DataFrame): String\/DataFrame = {
-			eval.injectIntrusions(df, IntrusionKind.allKinds.map(k => (k,3)),
-				min, max, conf.interval, conf.intrusionsDir)
+			eval.injectIntrusions(df, conf.intrusions, min, max, conf.interval, conf.intrusionsDir)
 		}
 		val fe = new FeatureExtractor(spark, inject)
 		for(

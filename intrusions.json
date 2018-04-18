@@ -1,0 +1,9 @@
+{
+  "name" : "BroSSHintrusions",
+  "intrusions" : [ {
+    "name" : "tooManyAuthAttempts",
+    "doc" : "The src entity tried to authenticate an unusual number of times to the same dst",
+    "requiredcolumns" : ["auth_attempts", "srchost"],
+    "number" : 3
+  }]
+}

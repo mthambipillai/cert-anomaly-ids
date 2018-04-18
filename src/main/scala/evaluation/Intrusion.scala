@@ -18,7 +18,6 @@ case class Intrusion(
 ) extends Serializable{
 
 	def check(signature: String):Boolean = {
-		println("checking "+signature+" with "+this.signature)
 		this.signature == signature
 	}
 

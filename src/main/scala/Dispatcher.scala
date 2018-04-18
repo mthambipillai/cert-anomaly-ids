@@ -21,7 +21,7 @@ import scala.util.Try
 import scalaz._
 import Scalaz._
 
-class Dispatcher(spark: SparkSession, conf: IDSConfig){
+class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 
 	def dispatch(command: String):String\/Unit= command match{
 		case "extract" => handleExtract
@@ -31,7 +31,11 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig){
 	}
 
 	private def handleExtract():String\/Unit = {
-		val fe = new FeatureExtractor(spark, df => df)
+		val eval = new Evaluator(spark)
+		def inject(min: Long, max: Long, df: DataFrame): String\/DataFrame = {
+			eval.injectIntrusions(df, IntrusionKind.allKinds.map(k => (k,3)), min, max, conf.interval)
+		}
+		val fe = new FeatureExtractor(spark, inject)
 		for(
 			finalFeatures <- fe.extractFeatures(conf.filePath, conf.featuresschema, conf.extractor, conf.interval,
 				conf.trafficMode, conf.scaleMode)
@@ -48,16 +52,22 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig){
 				"Could not read '"+featuresFile+"' because of "+e.getMessage)
 			_ = features.cache()
 			detectors <- Detector.getDetectors(spark, conf, features)
-			anomalies <- new Ensembler().detectAndCombine(conf.trafficMode,conf.ensembleMode, conf.threshold, detectors)
+			ensembler = new Ensembler()
+			anomalies <- ensembler.detectAndCombine(conf.trafficMode,conf.ensembleMode, conf.threshold, detectors)
 		}yield {
 			features.unpersist()
-			new Evaluator().evaluateResults(anomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)
+			ensembler.persistAnomalies(anomalies, conf.trafficMode, conf.topAnomalies, conf.anomaliesFile)
 		}
 	}
 
 	private def handleInspect():String\/Unit = {
 		val ins = new Inspector(spark)
-		ins.inspectAll(conf.filePath, conf.featuresschema, conf.extractor, conf.anomaliesFile, 
-			conf.trafficMode, conf.interval, conf.rules, conf.inspectionResults)
+		val eval = new Evaluator(spark)
+		for{
+			(realLogs, injectedLogs) <- ins.getAllLogs(conf.filePath, conf.featuresschema, conf.extractor,
+				conf.anomaliesFile, conf.trafficMode, conf.interval)
+			_ <- eval.evaluateIntrusions(injectedLogs)
+
+		}yield ins.inspectLogs(realLogs, conf.rules, conf.inspectionResults)
 	}
 }

@@ -7,6 +7,7 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.expressions.UserDefinedFunction
+import org.apache.spark.sql.SaveMode
 
 class Ensembler(){
 
@@ -26,6 +27,20 @@ class Ensembler(){
 			combineAll(eType, eUDF, threshold, detected)
 		}
 	}
+
+	def persistAnomalies(detected: DataFrame, trafficMode: String, nbTop: Int, destFile: String):Unit = {
+		val eType = trafficMode+"entity"
+		val distDetected = detected.dropDuplicates(Array(trafficMode+"entity", "timeinterval"))
+		val otherCols = detected.columns.toList.filterNot(c => c==eType || c=="timeinterval")
+		val newCols = eType::("timeinterval"::otherCols)
+		val scoreCol = newCols.filter(_.contains("score")).head
+		val top = distDetected.sort(desc(scoreCol)).limit(nbTop).select(newCols.head, newCols.tail:_*)
+		println("Writing top "+nbTop+" intrusions detected to "+destFile+".")
+		top.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv")
+		.option("header", "true").save(destFile)
+	}
+
+	
 
 	def detectAll(threshold: Double, detectors: List[Detector]):Seq[DataFrame] = {
 		detectors.map(_.detect(threshold))

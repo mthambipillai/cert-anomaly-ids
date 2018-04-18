@@ -121,7 +121,7 @@ object Feature{
 	}
 
 	private val hourFormatter = new SimpleDateFormat("HH");
-	private def toHour(df: SimpleDateFormat) = udf((t: Long) => df.format(new Date(t)).toDouble)
+	private def toHour(sdf: SimpleDateFormat) = udf((t: Long) => sdf.format(new Date(t)).toDouble)
 	def parseHourCol(df: DataFrame, columnName: String): DataFrame = {
 		df.withColumn("hour", toHour(hourFormatter)(df("timestamp")))
 	}

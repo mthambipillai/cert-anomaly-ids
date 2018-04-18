@@ -12,6 +12,9 @@ abstract class Rule(
 ) extends Serializable {
 	def initAcc(spark: SparkSession): Option[DoubleAccumulator]
 	def flag(rows: List[Row], acc: Option[DoubleAccumulator], schema: StructType, tagIndex: Int, commentIndex: Int):(Boolean, List[Row]) = {
+		if(rows.size==0){
+			return (false,rows)
+		}
 		val firstSeq = rows(0).toSeq
 		val tag = firstSeq(tagIndex).asInstanceOf[String]
 		val (isAnomaly, comments) = flagAux(schema, rows, acc)

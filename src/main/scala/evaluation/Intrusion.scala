@@ -13,9 +13,20 @@ case class Intrusion(
 	val kind: IntrusionKind,
 	val src: String,
 	val beginTimestamp: Long,
-	val endTimestamp: Long
+	val endTimestamp: Long,
+	val signature: String
 ) extends Serializable{
-	def inject(df: DataFrame, columns: List[String]): String\/DataFrame = {
-		kind.inject(df, columns, src, beginTimestamp, endTimestamp)
+
+	def check(signature: String):Boolean = {
+		println("checking "+signature+" with "+this.signature)
+		this.signature == signature
+	}
+
+	def findMatch(detectedSignatures: List[String]):Int = {
+		detectedSignatures.indexWhere(check(_))
+	}
+
+	override def toString():String = {
+		src+" is involved in a "+kind.name+" intrusion between "+beginTimestamp+" and "+endTimestamp+"."
 	}
 }

@@ -23,7 +23,7 @@ import Scalaz._
 /*
 API to extract and preprocess features from data.
 */
-class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) extends Serializable{
+class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => String\/DataFrame) extends Serializable{
 
 	/*
 	Returns a DataFrame from the file 'filePath' with all the features defined by 'features'
@@ -40,11 +40,14 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => DataFrame) exte
 			sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles"
 			df <- Try(spark.sql(sqlStmt)).toDisjunction.leftMap(e =>
 				"Could not execute statement '"+sqlStmt+"' because of "+e.getMessage)
+			minMax = df.agg(min("timestamp"),max("timestamp")).head
+			minTime = minMax.getLong(0)
+			maxTime = minMax.getLong(1)
+			dfInjected <- inject(minTime, maxTime, df)
 			ee = EntityExtractor.getByName(extractor)
-			(df2,newFeatures) <- ee.extract(df, features, eType)
+			(df2,newFeatures) <- ee.extract(dfInjected, features, eType)
 		}yield{
-			val dfInjected = inject(df2)
-			val res = newFeatures.map(f => f.parseCol(_)).foldLeft(dfInjected){ (previousdf, parser) => parser(previousdf) }
+			val res = newFeatures.map(f => f.parseCol(_)).foldLeft(df2){ (previousdf, parser) => parser(previousdf) }
 			(res, newFeatures)
 		}
 	}

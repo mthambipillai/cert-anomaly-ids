@@ -20,12 +20,14 @@ import scala.concurrent.Future
 import scala.util.Try
 import scalaz._
 import Scalaz._
+import evaluation.Signer
 
 object MainIDSApp {
   def main(args: Array[String]) {
     val t0 = System.nanoTime()
     val spark = SparkSession.builder.appName("MainIDSApp").getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
+    spark.sparkContext.register(Signer.acc, "signerAccumulator")
     val finalRes = for{
       conf <- IDSConfig.loadConf(args, "application.conf")
       res <- new Dispatcher(spark, conf).dispatch(conf.mode)

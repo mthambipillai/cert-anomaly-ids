@@ -23,18 +23,44 @@ class Inspector(spark: SparkSession){
 	private val dateFormatter = new SimpleDateFormat("dd.MM'-'HH:mm:ss:SSS");
 	private def toDate(df: SimpleDateFormat) = udf((t: Long) => df.format(new Date(t)))
 
-	def inspectAll(filePath: String, features: List[Feature], extractor: String, anomaliesFile: String,
-		eType: String, interval: Duration, rules: List[Rule], resultsFile: String): String\/Unit = {
+	def inspectLogs(allLogs: List[DataFrame], rules: List[Rule], resultsFile: String):Unit = {
+		val nbCols = allLogs.head.columns.size
+		val tagIndexB = spark.sparkContext.broadcast(nbCols-2)
+		val commentIndexB = spark.sparkContext.broadcast(nbCols-1)
+		val newSchema = allLogs.head.schema
+		val encoder = RowEncoder(newSchema)
+		println("Inspecting logs...")
+		val (tags, dfs) = allLogs.map(df => 
+			flag(df, rules, newSchema, encoder, tagIndexB, commentIndexB)).toList.unzip
+		val all = dfs.tail.foldLeft(dfs.head)(_.union(_))
+
+		printPrecision(all, dfs.size, resultsFile)
+
+		println("Writing results to "+resultsFile+"...")
+		all.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv")
+		.option("header", "true").save(resultsFile)
+	}
+
+	def getAllLogs(filePath: String, features: List[Feature], extractor: String, anomaliesFile: String,
+		eType: String, interval: Duration):String\/(List[DataFrame],List[DataFrame])={
 		val ee = EntityExtractor.getByName(extractor)
+		val featuresNames = features.map(_.name)
+		val featuresString = featuresNames.mkString(",")
 		for{
-            logFile <- Try(spark.read.parquet(filePath)).toDisjunction.leftMap(e =>
-            	"Could not read '"+filePath+"' because of "+e.getMessage)
-            _ = logFile.createOrReplaceTempView("logfiles")
-            anoms <- loadAnoms(anomaliesFile)
-            _ = println("Fetching matching logs...")
-			allLogs <- anoms.zipWithIndex.traverseU{case (row,id) =>
+			tempLogFile <- Try(spark.read.parquet(filePath)).toDisjunction.leftMap(e =>
+				"Could not read '"+filePath+"' because of "+e.getMessage)
+			_ = tempLogFile.createOrReplaceTempView("temp")
+			logFile = spark.sql("SELECT "+featuresString+" FROM temp")
+			tempIntrusionsLogs <- Try(spark.read.parquet("../intrusionslogs/*")).toDisjunction.leftMap(e =>
+				"Could not read '"+"filePath"+"' because of "+e.getMessage)
+			intrusionsLogs = tempIntrusionsLogs.select(featuresNames.head, featuresNames.tail:_*)
+			_ = logFile.createOrReplaceTempView("logfiles")
+			_ = intrusionsLogs.createOrReplaceTempView("injectedLogs")
+			(realAnoms, injectedAnoms) <- loadAnoms(anomaliesFile)
+			_ = println("Fetching matching logs...")
+			allLogs <- realAnoms.zipWithIndex.traverseU{case (row,id) =>
 				for{
-					sqlStmt <- getStmt(row, features, interval, eType, ee)
+					sqlStmt <- getStmt(row, featuresString, interval, eType, ee)
 				}yield{
 					val logs = getLogs(sqlStmt)
 					val withID = logs.withColumn("id", lit(id))
@@ -43,26 +69,21 @@ class Inspector(spark: SparkSession){
 					ordered.withColumn("anomalytag",lit("")).withColumn("comments",lit(""))
 				}
 			}
-		}yield{
-			val nbCols = features.size+3//columns 'id', 'anomalytag' and 'comments' were added
-			val tagIndexB = spark.sparkContext.broadcast(nbCols-2)
-			val commentIndexB = spark.sparkContext.broadcast(nbCols-1)
-			val newSchema = allLogs.head.schema
-			val encoder = RowEncoder(newSchema)
-			val (tags, dfs) = allLogs.map(df => 
-				flag(df, rules, newSchema, encoder, tagIndexB, commentIndexB)).toList.unzip
-			val all = dfs.tail.foldLeft(dfs.head)(_.union(_))
-
-			printPrecision(tags, resultsFile)
-
-			println("Writing results to "+resultsFile+"...")
-			all.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save(resultsFile)
-		}
+		}yield (allLogs, getInjectedLogs(injectedAnoms, interval))
 	}
 
-	private def printPrecision(tags: List[Boolean], resultsFile: String):Unit = {
-		val nbPositives = tags.filter(_==true).size
-		val nbAll = tags.size
+	private def getInjectedLogs(injectedAnoms: List[Row], interval: Duration):List[DataFrame] = {
+		injectedAnoms.map(row => {
+			val beginTimestamp = row.getString(1).toDouble.toLong
+			val endTimeStamp = beginTimestamp+interval.toMillis
+			val stmt = "SELECT * FROM injectedLogs WHERE srchost='"+row.getString(0)+
+				"' AND timestamp>="+beginTimestamp+" AND timestamp<="+endTimeStamp
+			spark.sql(stmt).sort(asc("timestamp"))
+		})
+	}
+
+	private def printPrecision(all: DataFrame, nbAll:Int, resultsFile: String):Unit = {
+		val nbPositives = all.filter(col("anomalytag")===lit("yes")).count.toInt
 		val nbNegatives = nbAll - nbPositives
 		val precision = (nbPositives.toDouble/nbAll.toDouble)*100.0
 		println("Number of detected anomalies tagged as true anomalies (Precision) : "+
@@ -82,12 +103,16 @@ class Inspector(spark: SparkSession){
 		println(text+"\n")
 	}
 
-	private def loadAnoms(anomaliesFile: String): String\/List[Row]={
+	private def loadAnoms(anomaliesFile: String): String\/(List[Row], List[Row])={
 		println("Loading anomalies...")
-		Try(spark.read.format("com.databricks.spark.csv")
-			.option("header", "true").load(anomaliesFile).collect.toList)
-			.toDisjunction.leftMap(e =>
-            "Could not read '"+anomaliesFile+"' because of "+e.getMessage)
+		for{
+			all <- Try(spark.read.format("com.databricks.spark.csv")
+				.option("header", "true").load(anomaliesFile).collect.toList)
+				.toDisjunction.leftMap(e =>
+					"Could not read '"+anomaliesFile+"' because of "+e.getMessage)
+			injected = all.filter(_.getString(0).contains("dummy"))
+			real = all.filterNot(_.getString(0).contains("dummy"))
+		}yield (real, injected)
 	}
 
 	private def extractFromRow(row: Row, interval: Duration):(String,Long,Long) ={
@@ -97,7 +122,7 @@ class Inspector(spark: SparkSession){
 		(entity, beginTimestamp, endTimeStamp)
 	}
 
-	private def getStmt(row: Row, features: List[Feature], interval: Duration,
+	private def getStmt(row: Row, featuresString: String, interval: Duration,
 		eType: String, ee: EntityExtractor):String\/String ={
 		val entity = row.getString(0)
 		val beginTimestamp = row.getString(1).toDouble.toLong
@@ -106,7 +131,7 @@ class Inspector(spark: SparkSession){
 			(colType, originalEntity) <- ee.reverse(entity)
 		}yield{
 			val col = eType+colType
-			"SELECT "+features.map(_.name).mkString(",")+" FROM logfiles WHERE "+col+"='"+originalEntity+
+			"SELECT "+featuresString+" FROM logfiles WHERE "+col+"='"+originalEntity+
 				"' AND timestamp>="+beginTimestamp+" AND timestamp<="+endTimeStamp
 		}
 	}
@@ -132,7 +157,7 @@ class Inspector(spark: SparkSession){
 			}
 			nRows.toIterator
 		})(encoder)
-		val finalTag = tagged.head.getString(tagIndexB.value)
-		(finalTag=="yes", tagged)
+		//val finalTag = tagged.head.getString(tagIndexB.value)
+		(true, tagged)
 	}
 }

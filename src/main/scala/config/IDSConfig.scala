@@ -29,6 +29,7 @@ case class IDSConfig(
 	val anomaliesFile: String,
   val rules: List[Rule],
   val inspectionResults: String,
+  val recall: Boolean,
   val intrusions: List[(IntrusionKind,Int)],
   val intrusionsDir: String,
   //IsolationForest parameters
@@ -59,6 +60,8 @@ object IDSConfig{
             c.copy(scaleMode = x) ).text("How to scale the features. Can be either unit or rescale."),
           opt[String]('f', "featuresfile").action( (x, c) =>
             c.copy(featuresFile = x) ).text("Parquet file to write the scaled features to."),
+          opt[Boolean]('r', "recall").action( (x, c) =>
+            c.copy(recall = x) ).text("True if intrusions should be injected to compute recall."),
           opt[String]('i', "intrusions").action( (x, c) =>
             c.copy(intrusions = IntrusionsParser.parse(x).getOrElse(Nil)) ).text("Source of intrusions."),
           opt[String]('d', "intrusionsdir").action( (x, c) =>
@@ -121,6 +124,8 @@ object IDSConfig{
       anomaliesFile = config.getString("anomaliesfile")
       rules <- RulesParser.parse(config.getString("rules"))
       inspectionResults = config.getString("resultsfile")
+      recall <- Try(config.getBoolean("recall")).toDisjunction.leftMap(e =>
+        "Could not parse boolean for 'recall'")
       intrusions <- IntrusionsParser.parse(config.getString("intrusions"))
       intrusionsDir = config.getString("intrusionsdir")
       isolationForest = IsolationForestConfig.load(config)
@@ -128,7 +133,7 @@ object IDSConfig{
 
       fromFile = IDSConfig(mode, filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
         ensembleMode, featuresFile, detectors, threshold, topAnomalies, anomaliesFile, rules, inspectionResults,
-        intrusions, intrusionsDir, isolationForest, kMeans)
+        recall, intrusions, intrusionsDir, isolationForest, kMeans)
       res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
       checkFeatures <- if(res.featuresschema.isEmpty) "Could not parse features.".left else res.right
       checkRules <- if(checkFeatures.rules.isEmpty) "Could not parse rules.".left else checkFeatures.right

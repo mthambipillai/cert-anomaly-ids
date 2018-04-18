@@ -31,9 +31,13 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 	}
 
 	private def handleExtract():String\/Unit = {
-		val eval = new Evaluator(spark)
 		def inject(min: Long, max: Long, df: DataFrame): String\/DataFrame = {
-			eval.injectIntrusions(df, conf.intrusions, min, max, conf.interval, conf.intrusionsDir)
+			if(conf.recall){
+				val eval = new Evaluator(spark)
+				eval.injectIntrusions(df, conf.intrusions, min, max, conf.interval, conf.intrusionsDir)
+			}else{
+				df.right
+			}
 		}
 		val fe = new FeatureExtractor(spark, inject)
 		for(
@@ -65,8 +69,8 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 		val eval = new Evaluator(spark)
 		for{
 			(realLogs, injectedLogs) <- ins.getAllLogs(conf.filePath, conf.featuresschema, conf.extractor,
-				conf.anomaliesFile, conf.trafficMode, conf.interval, conf.intrusionsDir)
-			_ <- eval.evaluateIntrusions(injectedLogs, conf.intrusionsDir)
+				conf.anomaliesFile, conf.trafficMode, conf.interval, conf.recall, conf.intrusionsDir)
+			_ <- if(conf.recall) eval.evaluateIntrusions(injectedLogs, conf.intrusionsDir) else "".left
 
 		}yield ins.inspectLogs(realLogs, conf.rules, conf.inspectionResults)
 	}

@@ -42,7 +42,7 @@ class Inspector(spark: SparkSession){
 	}
 
 	def getAllLogs(filePath: String, features: List[Feature], extractor: String, anomaliesFile: String,
-		eType: String, interval: Duration, intrusionsDir: String):String\/(List[DataFrame],List[DataFrame])={
+		eType: String, interval: Duration, recall: Boolean, intrusionsDir: String):String\/(List[DataFrame],List[DataFrame])={
 		val ee = EntityExtractor.getByName(extractor)
 		val featuresNames = features.map(_.name)
 		val featuresString = featuresNames.mkString(",")
@@ -56,7 +56,7 @@ class Inspector(spark: SparkSession){
 			intrusionsLogs = tempIntrusionsLogs.select(featuresNames.head, featuresNames.tail:_*)
 			_ = logFile.createOrReplaceTempView("logfiles")
 			_ = intrusionsLogs.createOrReplaceTempView("injectedLogs")
-			(realAnoms, injectedAnoms) <- loadAnoms(anomaliesFile)
+			(realAnoms, injectedAnoms) <- loadAnoms(anomaliesFile, recall)
 			_ = println("Fetching matching logs...")
 			allLogs <- realAnoms.zipWithIndex.traverseU{case (row,id) =>
 				for{
@@ -103,14 +103,14 @@ class Inspector(spark: SparkSession){
 		println(text+"\n")
 	}
 
-	private def loadAnoms(anomaliesFile: String): String\/(List[Row], List[Row])={
+	private def loadAnoms(anomaliesFile: String, recall: Boolean): String\/(List[Row], List[Row])={
 		println("Loading anomalies...")
 		for{
 			all <- Try(spark.read.format("com.databricks.spark.csv")
 				.option("header", "true").load(anomaliesFile).collect.toList)
 				.toDisjunction.leftMap(e =>
 					"Could not read '"+anomaliesFile+"' because of "+e.getMessage)
-			injected = all.filter(_.getString(0).contains("dummy"))
+			injected = if(recall) all.filter(_.getString(0).contains("dummy")) else Nil
 			real = all.filterNot(_.getString(0).contains("dummy"))
 		}yield (real, injected)
 	}

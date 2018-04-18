@@ -15,12 +15,14 @@ case class IntrusionKind(
 	val requiredColumns: List[String],
 	private val injectAux: (DataFrame, String, Long, Long) => DataFrame
 ){
-	def inject(df: DataFrame, columns: List[String], minTimestamp: Long, maxTimestamp: Long): String\/(DataFrame,Intrusion) = {
+	def inject(df: DataFrame, columns: List[String], minTimestamp: Long, maxTimestamp: Long,
+		directory: String): String\/(DataFrame,Intrusion) = {
 		if(requiredColumns.forall(c => columns.contains(c))){
 			val src = IntrusionKind.getNextSrc()
 			val newRows = injectAux(df, src, minTimestamp, maxTimestamp)
 			val selectedNewRows = newRows.select(columns.head, columns.tail: _*)
-			selectedNewRows.sort(asc("timestamp")).write.mode(SaveMode.Overwrite).parquet("../intrusionslogs/"+src+".parquet")
+			selectedNewRows.sort(asc("timestamp"))
+			.write.mode(SaveMode.Overwrite).parquet(directory+"/logs/"+src+".parquet")
 			val intrusion = Intrusion(this, src, minTimestamp, maxTimestamp, Signer.getSignature(selectedNewRows))
 			(df.union(selectedNewRows), intrusion).right
 		}else{

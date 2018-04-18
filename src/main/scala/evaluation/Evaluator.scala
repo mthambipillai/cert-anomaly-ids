@@ -20,8 +20,8 @@ class Evaluator(spark: SparkSession) extends Serializable{
 	private val r = new Random(System.currentTimeMillis())
 	private var intrusions:List[Intrusion] = Nil
 
-	def injectIntrusions(df: DataFrame, intrusionKinds: List[(IntrusionKind, Int)],
-		minTimestamp: Long, maxTimestamp: Long, intrusionTime: Duration):String\/DataFrame = {
+	def injectIntrusions(df: DataFrame, intrusionKinds: List[(IntrusionKind, Int)], minTimestamp: Long,
+		maxTimestamp: Long, intrusionTime: Duration, directory: String):String\/DataFrame = {
 		val maxBeginIntrusionTime = maxTimestamp - intrusionTime.toMillis
 		val allKinds = intrusionKinds.flatMap{case (intrusionKind, nbOccurences) =>
 			(1 to nbOccurences).map(i => intrusionKind)}
@@ -33,16 +33,16 @@ class Evaluator(spark: SparkSession) extends Serializable{
 				for{
 					(previousdf,intrusions) <- disjunction
 					(min, max) = getInterval(minTimestamp, maxBeginIntrusionTime, intrusionTime)
-					(nextdf,intrusion) <- intrusionKind.inject(previousdf, cols, min, max)
+					(nextdf,intrusion) <- intrusionKind.inject(previousdf, cols, min, max, directory)
 				}yield (nextdf, intrusion::intrusions)
 			}
-			_ = persistIntrusions(intrusions)
+			_ = persistIntrusions(intrusions, directory)
 		}yield resDF
 	}
 
-	def evaluateIntrusions(logs: List[DataFrame]):String\/Unit = {
+	def evaluateIntrusions(logs: List[DataFrame], directory: String):String\/Unit = {
 		for{
-			intrusions <- (loadIntrusions()).right
+			intrusions <- loadIntrusions(directory)
 		}yield{
 			val detected = checkIntrusions(intrusions, logs)
 			val nbTotal = intrusions.size
@@ -76,30 +76,32 @@ class Evaluator(spark: SparkSession) extends Serializable{
 		println("Number of known intrusions detected (Recall) : "+nbDetected+"/"+nbTotal+" = "+recall+"%\n")
 	}
 
-	def persistIntrusions(intrusions: List[Intrusion]):Unit={
+	def persistIntrusions(intrusions: List[Intrusion], directory: String):Unit={
 		intrusions.zipWithIndex.map{case (intrusion, index) =>
-			val oos = new ObjectOutputStream(new FileOutputStream("../intrusions/intrusion"+index, false))
+			val oos = new ObjectOutputStream(new FileOutputStream(directory+"/intrusion"+index, false))
 			oos.writeObject(intrusion)
 			oos.close()
 		}
 	}
 
-	def loadIntrusions():List[Intrusion]={
-		val fileNames = getListOfFiles("../intrusions").map(_.getName())
-		fileNames.map{ name =>
-			val ois = new ObjectInputStream(new FileInputStream("../intrusions/"+name))
+	def loadIntrusions(directory: String):String\/List[Intrusion]={
+		for{
+			files <- getListOfFiles(directory)
+			fileNames = files.map(_.getName())
+		}yield fileNames.map{ name =>
+			val ois = new ObjectInputStream(new FileInputStream(directory+"/"+name))
 			val intrusion = ois.readObject.asInstanceOf[Intrusion]
 			ois.close
 			intrusion
 		}
 	}
 
-	private def getListOfFiles(dir: String):List[File] = {
+	private def getListOfFiles(dir: String):String\/List[File] = {
 		val d = new File(dir)
 		if(d.exists && d.isDirectory){
-			d.listFiles.filter(_.isFile).toList
+			d.listFiles.filter(_.isFile).toList.right
 		}else{
-			List[File]()
+			("Cannot read files from '"+dir+"'").left
 		}
 	}
 }

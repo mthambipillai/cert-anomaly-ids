@@ -42,7 +42,7 @@ class Inspector(spark: SparkSession){
 	}
 
 	def getAllLogs(filePath: String, features: List[Feature], extractor: String, anomaliesFile: String,
-		eType: String, interval: Duration):String\/(List[DataFrame],List[DataFrame])={
+		eType: String, interval: Duration, intrusionsDir: String):String\/(List[DataFrame],List[DataFrame])={
 		val ee = EntityExtractor.getByName(extractor)
 		val featuresNames = features.map(_.name)
 		val featuresString = featuresNames.mkString(",")
@@ -51,8 +51,8 @@ class Inspector(spark: SparkSession){
 				"Could not read '"+filePath+"' because of "+e.getMessage)
 			_ = tempLogFile.createOrReplaceTempView("temp")
 			logFile = spark.sql("SELECT "+featuresString+" FROM temp")
-			tempIntrusionsLogs <- Try(spark.read.parquet("../intrusionslogs/*")).toDisjunction.leftMap(e =>
-				"Could not read '"+"filePath"+"' because of "+e.getMessage)
+			tempIntrusionsLogs <- Try(spark.read.parquet(intrusionsDir+"/logs/*")).toDisjunction.leftMap(e =>
+				"Could not read '"+intrusionsDir+"' because of "+e.getMessage)
 			intrusionsLogs = tempIntrusionsLogs.select(featuresNames.head, featuresNames.tail:_*)
 			_ = logFile.createOrReplaceTempView("logfiles")
 			_ = intrusionsLogs.createOrReplaceTempView("injectedLogs")

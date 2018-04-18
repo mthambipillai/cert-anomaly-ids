@@ -27,6 +27,7 @@ case class IDSConfig(
 	val anomaliesFile: String,
   val rules: List[Rule],
   val inspectionResults: String,
+  val intrusionsDir: String,
   //IsolationForest parameters
   val isolationForest: IsolationForestConfig,
   //KMeans parameters
@@ -54,7 +55,9 @@ object IDSConfig{
           opt[String]('s', "scalemode").action( (x, c) =>
             c.copy(scaleMode = x) ).text("How to scale the features. Can be either unit or rescale."),
           opt[String]('f', "featuresfile").action( (x, c) =>
-            c.copy(featuresFile = x) ).text("Parquet file to write the scaled features to.")
+            c.copy(featuresFile = x) ).text("Parquet file to write the scaled features to."),
+          opt[String]('i', "intrusionsdir").action( (x, c) =>
+            c.copy(intrusionsDir = x) ).text("Folder to write the injected intrusions to.")
         )
       cmd("detect").action( (_, c) => c.copy(mode = "detect") ).
         text("Read the computed features, detects anomalies and write them to a CSV file.").
@@ -85,7 +88,9 @@ object IDSConfig{
           opt[String]('r', "rules").action( (x, c) =>
             c.copy(rules = RulesParser.parse(x).getOrElse(Nil)) ).text("Source of rules."),
           opt[String]('i', "inspectionresultsfile").action( (x, c) =>
-            c.copy(inspectionResults = x) ).text("CSV file to write the results of the inspection.")
+            c.copy(inspectionResults = x) ).text("CSV file to write the results of the inspection."),
+          opt[String]('i', "intrusionsdir").action( (x, c) =>
+            c.copy(intrusionsDir = x) ).text("Folder to read the injected intrusions from.")
         )
     }
 	def loadConf(args: Array[String], confFile: String):String\/IDSConfig = {
@@ -111,11 +116,12 @@ object IDSConfig{
       anomaliesFile = config.getString("anomaliesfile")
       rules <- RulesParser.parse(config.getString("rules"))
       inspectionResults = config.getString("resultsfile")
+      intrusionsDir = config.getString("intrusionsdir")
       isolationForest = IsolationForestConfig.load(config)
       kMeans = KMeansConfig.load(config)
 
       fromFile = IDSConfig(mode, filePath, featuresschema, extractor, interval, trafficMode, scaleMode, ensembleMode,
-        featuresFile, detectors, threshold, topAnomalies, anomaliesFile, rules, inspectionResults,
+        featuresFile, detectors, threshold, topAnomalies, anomaliesFile, rules, inspectionResults, intrusionsDir,
         isolationForest, kMeans)
       res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
       checkFeatures <- if(res.featuresschema.isEmpty) "Could not parse features.".left else res.right

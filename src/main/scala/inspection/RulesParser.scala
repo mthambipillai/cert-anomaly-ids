@@ -6,6 +6,7 @@ import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import scala.util.Try
 import scalaz._
 import Scalaz._
+import java.io.File
 
 object RulesParser{
 	
@@ -39,23 +40,23 @@ object RulesParser{
 			SimpleRule.makeSimpleRule[Int]("version", -1, _.getInt(_), _< version, text).right
 		}
 		case "ssh_srcip" => {
-			val knownipsFileName = params.head
+			val knownipsFileName = resolvePath(params.head)
 			SimpleRule.makeFileContainsRule(knownipsFileName, "srcip", "", text)
 		}
 		case "ssh_dsthost" => {
-			val dsthostsFileName = params.head
+			val dsthostsFileName = resolvePath(params.head)
 			SimpleRule.makeFileNotContainsRule(dsthostsFileName, "dsthost", "null", text)
 		}
 		case "ssh_client" => {
-			val clientsFileName = params.head
+			val clientsFileName = resolvePath(params.head)
 			SimpleRule.makeFileNotContainsRule(clientsFileName, "client", "null", text)
 		}
 		case "ssh_server" => {
-			val serversFileName = params.head
+			val serversFileName = resolvePath(params.head)
 			SimpleRule.makeFileNotContainsRule(serversFileName, "server", "null", text)
 		}
 		case "ssh_cipher" => {
-			val ciphersFileName = params.head
+			val ciphersFileName = resolvePath(params.head)
 			SimpleRule.makeFileNotContainsRule(ciphersFileName, "cipher_alg", "null", text)
 		}
 		case "ssh_total_auth_attempts" => {
@@ -75,5 +76,13 @@ object RulesParser{
 			}).right
 		}
 		case _ => ("Unknown rule '"+name+"'").left
+	}
+
+
+	private def resolvePath(path: String):String = {
+		path.split(File.separator).map{ s => 
+	      if (s.startsWith("$")) scala.util.Properties.envOrElse(s.drop(1), "")
+	      else s
+		}.mkString(File.separator)
 	}
 }

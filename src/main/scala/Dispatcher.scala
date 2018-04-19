@@ -27,7 +27,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 		case "extract" => handleExtract
 		case "detect" => handleDetect
 		case "inspect" => handleInspect
-		case _ => ("Invalid command '"+conf.mode+"'.").left
+		case _ => ("Invalid command '"+conf.mode+"'. Try --help for more information.").left
 	}
 
 	private def handleExtract():String\/Unit = {
@@ -43,9 +43,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 		for(
 			finalFeatures <- fe.extractFeatures(conf.filePath, conf.featuresschema, conf.extractor, conf.interval,
 				conf.trafficMode, conf.scaleMode)
-		)yield{
-			fe.writeFeaturesToFile(finalFeatures, conf.featuresFile)
-		}
+		)yield fe.writeFeaturesToFile(finalFeatures, conf.featuresFile)
 	}
 
 	private def handleDetect():String\/Unit = {
@@ -70,7 +68,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 		for{
 			(realLogs, injectedLogs) <- ins.getAllLogs(conf.filePath, conf.featuresschema, conf.extractor,
 				conf.anomaliesFile, conf.trafficMode, conf.interval, conf.recall, conf.intrusionsDir)
-			_ <- if(conf.recall) eval.evaluateIntrusions(injectedLogs, conf.intrusionsDir) else "".left
+			_ <- if(conf.recall) eval.evaluateIntrusions(injectedLogs, conf.intrusionsDir) else "".right
 
 		}yield ins.inspectLogs(realLogs, conf.rules, conf.inspectionResults)
 	}

@@ -108,8 +108,7 @@ class Inspector(spark: SparkSession){
 		for{
 			all <- Try(spark.read.format("com.databricks.spark.csv")
 				.option("header", "true").load(anomaliesFile).collect.toList)
-				.toDisjunction.leftMap(e =>
-					"Could not read '"+anomaliesFile+"' because of "+e.getMessage)
+				.toDisjunction.leftMap(e => "Could not read '"+anomaliesFile+"' because of "+e.getMessage)
 			injected = if(recall) all.filter(_.getString(0).contains("dummy")) else Nil
 			real = all.filterNot(_.getString(0).contains("dummy"))
 		}yield (real, injected)

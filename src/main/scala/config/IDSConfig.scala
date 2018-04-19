@@ -103,9 +103,9 @@ object IDSConfig{
     }
 	def loadConf(args: Array[String], confFile: String):String\/IDSConfig = {
     for{
-      config <- Try(ConfigFactory.parseFile(new File(confFile))).toDisjunction.leftMap(e =>
+      configTemp <- Try(ConfigFactory.parseFile(new File(confFile))).toDisjunction.leftMap(e =>
         "Could not parse '"+confFile+"' because of "+e.getMessage)
-      mode = config.getString("mode")
+      config = configTemp.resolve()
       filePath = config.getString("logspath")
       featuresschema <- FeaturesParser.parse(config.getString("featuresschema"))
       extractor = config.getString("extractor")
@@ -131,7 +131,7 @@ object IDSConfig{
       isolationForest = IsolationForestConfig.load(config)
       kMeans = KMeansConfig.load(config)
 
-      fromFile = IDSConfig(mode, filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
+      fromFile = IDSConfig("", filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
         ensembleMode, featuresFile, detectors, threshold, topAnomalies, anomaliesFile, rules, inspectionResults,
         recall, intrusions, intrusionsDir, isolationForest, kMeans)
       res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")

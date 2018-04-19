@@ -9,3 +9,5 @@ clientstats.txt
 serverstats.txt
 cipher_algstats.txt
 dsthoststats.txt
+stats/*
+intrusions/*

@@ -7,3 +7,6 @@ The pipeline is divided into 3 steps: features extraction, anomaly detection and
 
 - You must have `Apache Spark v2.2.1` or higher installed.
 - If you want to add new components (see 'Extend' section), you need to have `Scala 2.11` and `sbt` installed.
+
+## Installation
+

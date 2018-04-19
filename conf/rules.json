@@ -14,23 +14,23 @@
     "text" : "version less than 2.x"
   }, {
     "name" : "ssh_srcip",
-    "params" : ["knownips.txt"],
+    "params" : ["../stats/knownips.txt"],
     "text" : "known malicious ip"
   }, {
     "name" : "ssh_dsthost",
-    "params" : ["dsthoststats.txt"],
+    "params" : ["../stats/dsthoststats.txt"],
     "text" : "unusual dsthost"
   }, {
     "name" : "ssh_client",
-    "params" : ["clientstats.txt"],
+    "params" : ["../stats/clientstats.txt"],
     "text" : "unusual client"
   }, {
     "name" : "ssh_server",
-    "params" : ["serverstats.txt"],
+    "params" : ["../stats/serverstats.txt"],
     "text" : "unusual server"
   }, {
     "name" : "ssh_cipher",
-    "params" : ["cipher_algstats.txt"],
+    "params" : ["../stats/cipher_algstats.txt"],
     "text" : "unusual cipher"
   }, {
     "name" : "ssh_total_auth_attempts",

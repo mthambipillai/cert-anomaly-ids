@@ -40,23 +40,23 @@ object RulesParser{
 		}
 		case "ssh_srcip" => {
 			val knownipsFileName = params.head
-			SimpleRule.makeFileContainsRule(knownipsFileName, "srcip", "", text).right
+			SimpleRule.makeFileContainsRule(knownipsFileName, "srcip", "", text)
 		}
 		case "ssh_dsthost" => {
 			val dsthostsFileName = params.head
-			SimpleRule.makeFileNotContainsRule(dsthostsFileName, "dsthost", "null", text).right
+			SimpleRule.makeFileNotContainsRule(dsthostsFileName, "dsthost", "null", text)
 		}
 		case "ssh_client" => {
 			val clientsFileName = params.head
-			SimpleRule.makeFileNotContainsRule(clientsFileName, "client", "null", text).right
+			SimpleRule.makeFileNotContainsRule(clientsFileName, "client", "null", text)
 		}
 		case "ssh_server" => {
 			val serversFileName = params.head
-			SimpleRule.makeFileNotContainsRule(serversFileName, "server", "null", text).right
+			SimpleRule.makeFileNotContainsRule(serversFileName, "server", "null", text)
 		}
 		case "ssh_cipher" => {
 			val ciphersFileName = params.head
-			SimpleRule.makeFileNotContainsRule(ciphersFileName, "cipher_alg", "null", text).right
+			SimpleRule.makeFileNotContainsRule(ciphersFileName, "cipher_alg", "null", text)
 		}
 		case "ssh_total_auth_attempts" => {
 			val totalNbAttempts = params.head.toInt

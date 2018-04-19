@@ -10,3 +10,6 @@ The pipeline is divided into 3 steps: features extraction, anomaly detection and
 
 ## Installation
 
+`git clone` the project, `cd` into it and follow one of the following :
+- Linux with root privileges : run `sh install-ids.sh`.
+- Other cases : extract the files from the `spark-ids.tar.gz` archive, copy `jars/ids.jar` to the root of the project and run it with `spark-submit ids.jar`. Please note that in this case you cannot run it from another directory.

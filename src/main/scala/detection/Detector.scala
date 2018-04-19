@@ -3,6 +3,7 @@ import org.apache.spark.sql.DataFrame
 import config.IDSConfig
 import isolationforest.IsolationForest
 import kmeans.KMeansDetector
+import lof.LOFDetector
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -40,7 +41,7 @@ object Detector{
 				conf.kMeans.maxNbK, conf.kMeans.elbowRatio, conf.kMeans.nbK, conf.kMeans.lowBound, conf.kMeans.upBound)
 				km.right
 			}
-			case "lof" => ???
+			case "lof" => new LOFDetector(features).right
 			case _ => ("Detector '"+name+"' does not exist.").left
 		}
 	}

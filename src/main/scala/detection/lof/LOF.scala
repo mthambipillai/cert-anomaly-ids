@@ -17,6 +17,7 @@
 
 package org.apache.spark.ml.outlier
 
+
 import org.apache.spark.ml.Transformer
 import org.apache.spark.ml.linalg.{Vector, VectorUDT, Vectors}
 import org.apache.spark.ml.param.shared.{HasFeaturesCol, HasOutputCol}

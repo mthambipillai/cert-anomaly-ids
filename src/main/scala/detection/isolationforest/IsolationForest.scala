@@ -64,7 +64,7 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTr
 		scala.math.pow(2.0, mean)
 	})
 
-	override def detect(threshold: Double = 0.5):DataFrame = {
+	override def detect(threshold: Double):DataFrame = {
 		println("\nStarting to detect with isolationForest...\n")
 		val lc = (-1.0)*trees.length * c
 		val pathLengthThreshold = lc*(log(threshold)/log(2.0))

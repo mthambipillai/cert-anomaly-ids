@@ -33,7 +33,7 @@ class KMeansDetector(spark: SparkSession, data: DataFrame, trainRatio: Double, m
 		}
 	}
 
-	override def detect(threshold: Double = 0.5):DataFrame = {
+	override def detect(threshold: Double):DataFrame = {
 		println("\nStarting to detect with KMeans...\n")
 		println("Computing cluster sizes...")
 		val withClusters = model.transform(assembled).drop("features")

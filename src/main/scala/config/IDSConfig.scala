@@ -137,6 +137,7 @@ object IDSConfig{
       res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
       checkFeatures <- if(res.featuresschema.isEmpty) "Could not parse features.".left else res.right
       checkRules <- if(checkFeatures.rules.isEmpty) "Could not parse rules.".left else checkFeatures.right
-    }yield checkRules
+      checkIntrusions <- if(checkRules.intrusions.isEmpty) "Could not parse intrusions.".left else checkRules.right
+    }yield checkIntrusions
 	}
 }

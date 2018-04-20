@@ -29,15 +29,17 @@ object RulesParser{
 
 	private def getRule(name: String, params: List[String], text: String): String\/Rule = name match{
 		case "ssh_auth_attempts" => {
-			val nbAttempts = params.head.toInt
-			SimpleRule.makeSimpleRule[Int]("auth_attempts", nbAttempts, _.getInt(_), _>=nbAttempts, text).right
+			for{
+				nbAttempts <- Try(params.head.toInt).toDisjunction.leftMap(e => e.getMessage)
+			}yield SimpleRule.makeSimpleRule[Int]("auth_attempts", nbAttempts, _.getInt(_), _>=nbAttempts, text)
 		}
 		case "ssh_dstport" => {
 			SimpleRule.makeSimpleRule[Int]("dstport", -1, _.getInt(_), _!=22, text).right
 		}
 		case "ssh_version" => {
-			val version = params.head.toInt
-			SimpleRule.makeSimpleRule[Int]("version", -1, _.getInt(_), _< version, text).right
+			for{
+				version <- Try(params.head.toInt).toDisjunction.leftMap(e => e.getMessage)
+			}yield SimpleRule.makeSimpleRule[Int]("version", -1, _.getInt(_), _< version, text)
 		}
 		case "ssh_srcip" => {
 			val knownipsFileName = resolvePath(params.head)
@@ -77,7 +79,6 @@ object RulesParser{
 		}
 		case _ => ("Unknown rule '"+name+"'").left
 	}
-
 
 	private def resolvePath(path: String):String = {
 		path.split(File.separator).map{ s => 

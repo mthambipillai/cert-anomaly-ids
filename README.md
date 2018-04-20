@@ -22,6 +22,7 @@ You can run 3 different commands :
 - `spark-ids inspect` : Reads the previously computed and persisted anomalies and reconstruct the original logs by fetching the original source of logs. A set of user-defined rules are then applied to try to flag the anomalies as true or false positives. The results are then written to csv files for further investigation.
 
 Each of these commands take parameters that are defined in `conf/application.conf` and can be overriden with command line flags. Execute `spark-ids --help` to see how to use them.
+You can find more information about every parameter in the [wiki](https://gitlab.cern.ch/mthambip/IDSv2.2/blob/master/Wiki.md).
 
 ## Example
 
@@ -80,9 +81,11 @@ Finally we inspect the detected anomalies and get one csv file per anomaly :
 |   ├── inspectionresultsSSH-part0002.csv
 ```
 
-All the parameters that we didn't explicitly set as flags were defined in `$SPARK_IDS_HOME/conf`.
+All the other parameters that we didn't explicitly set as flags were defined in `$SPARK_IDS_HOME/conf`.
 
 ## Contributing
+
+This section assumes that the reader is familiar with the content of the [wiki](https://gitlab.cern.ch/mthambip/IDSv2.2/blob/master/Wiki.md).
 
 For any change to the code, you need to rebuild the project with `sbt assembly`. If you installed `spark-ids` on your machine, you then need to copy the newly computed jar to the installed jar :
 `sudo cp target/scala-2.11/IDS\ Project-assembly-2.0.jar $SPARK_IDS_HOME/jars/ids.jar`

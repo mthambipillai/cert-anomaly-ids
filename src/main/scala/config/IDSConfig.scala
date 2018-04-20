@@ -39,8 +39,8 @@ case class IDSConfig(
 )
 
 object IDSConfig{
-	val parser = new scopt.OptionParser[IDSConfig]("ids") {
-      head("ids", "1.0")
+	val parser = new scopt.OptionParser[IDSConfig]("spark-ids") {
+      head("Spark-IDS", "1.0")
       opt[String]('f', "featuresschema").action( (x, c) =>
         c.copy(featuresschema = FeaturesParser.parse(x).getOrElse(Nil)) ).text("Source of features.")
       opt[String]('e', "extractor").action( (x, c) =>

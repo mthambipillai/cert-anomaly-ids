@@ -17,6 +17,15 @@ Finally, the reconstructed logs with the tags and comments are persisted to one 
 
 ## Global Parameters
 
+Every parameter has flag letter and a consistent name between the configuration and the full flag name. So for every entry `param=...` in `conf/application.conf`, there is a flag `-p, --param <value>`.
+
+The following parameters must be consistent accross the different commands `extract`, `detect` and `inspect` so they must be specified right after `spark-ids`.
+
+- `-f, --featuresschema` : Defines the json file of the schema that describes the different columns, their types, aggregation functions, etc... More details about it can be found in the Features Schema subsection.
+- `-e --extractor` : Defines the name of the entity extractor to use (how to define the source/destination entity based on the fields). The following entity extractors are already implemented :
+* `hostsOnly` : Use only the hostname given by reverse DNS, "NOT_RESOLVED" if it couldn't be resolved.
+* `ipOnly` : Use only IP addresses.
+
 ### Extract
 
 ### Detect

@@ -46,7 +46,7 @@ object IDSConfig{
       opt[String]('e', "extractor").action( (x, c) =>
         c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
       opt[Duration]('i', "interval").action( (x, c) =>
-        c.copy(interval = x) ).text("Interval for aggregation per src/dst entity in Scala Duration format. Default is 1 hour.")
+        c.copy(interval = x) ).text("Interval for aggregation per src/dst entity in Scala Duration format. Default is '60 min'.")
       opt[String]('t', "trafficmode").action( (x, c) =>
         c.copy(trafficMode = x) ).text("With which entity to aggregate. Can be either src or dst.")
       help("help").text("Prints this usage text.")

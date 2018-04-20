@@ -22,9 +22,14 @@ Every parameter has flag letter and a consistent name between the configuration 
 The following parameters must be consistent accross the different commands `extract`, `detect` and `inspect` so they must be specified right after `spark-ids`.
 
 - `-f, --featuresschema` : Defines the json file of the schema that describes the different columns, their types, aggregation functions, etc... More details about it can be found in the Features Schema subsection.
-- `-e --extractor` : Defines the name of the entity extractor to use (how to define the source/destination entity based on the fields). The following entity extractors are already implemented :
-* `hostsOnly` : Use only the hostname given by reverse DNS, "NOT_RESOLVED" if it couldn't be resolved.
-* `ipOnly` : Use only IP addresses.
+- `-e --extractor` : Defines the name of the entity extractor to use (how to define the source and destination entities based on the fields). Every entity extractor needs the original logs schema to contain some specific columns in order to be used. They are specified by the "Requires" list for each of the following already implemented entity extractors :
+	- `hostsOnly` : Use only the hostname given by reverse DNS, "NOT_RESOLVED" if it couldn't be resolved. Requires : `["srchost", "dsthost"]`
+	- `ipOnly` : Use only IP addresses. Requires : `["srcip", "dstip"]`
+	- `hostsWithIpFallback` : Use hostname and fallback to the IP address if it couldn't be resolved. Requires : `["srchost", "dsthost", "srcip", "dstip"]`
+	- `hostsWithCountryFallback` : Use hostname and fallback to the country from GeoIP if it couldn't be resolved. Requires : `["srchost","dsthost","srcip_country","dstip_country"]`
+	- `hostsWithOrgFallback` : Use hostname and fallback to the ISP if it couldn't be resolved. Requires : `["srchost","dsthost","srcip_org","dstip_org"]`
+- `-i --interval` : Defines the size of the time window for the aggregation and the logs reconstruction. It uses the [Scala duration notation](https://www.scala-lang.org/api/current/scala/concurrent/duration/package$$DurationInt.html) so `60 min`, `1 day` or `8 hours` are all valid.
+- `-t --trafficmode` : In IDSs, aggregated features are called 'traffic features'. This parameter defines whether aggregation is performed per source or destination entity. It can take 2 values : `src` or `dst`.
 
 ### Extract
 

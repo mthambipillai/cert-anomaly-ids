@@ -97,7 +97,7 @@ object IDSConfig{
             c.copy(rules = RulesParser.parse(x).getOrElse(Nil)) ).text("Source of rules."),
           opt[String]('i', "inspectionresultsfile").action( (x, c) =>
             c.copy(inspectionResults = x) ).text("CSV file to write the results of the inspection."),
-          opt[String]('i', "intrusionsdir").action( (x, c) =>
+          opt[String]('d', "intrusionsdir").action( (x, c) =>
             c.copy(intrusionsDir = x) ).text("Folder to read the injected intrusions from.")
         )
     }

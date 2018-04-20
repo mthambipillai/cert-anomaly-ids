@@ -23,6 +23,58 @@ You can run 3 different commands :
 
 Each of these commands take parameters that are defined in `conf/application.conf` and can be overriden with command line flags. Execute `spark-ids --help` to see how to use them.
 
+## Example
+
+Consider the following directory structure :
+```
+.
+├── _logs
+|   ├── broSSHlogs-jan.parquet
+|   ├── broSSHlogs-feb.parquet
+├── _features
+├── _anomalies
+├── _inspections
+```
+We first extract features from the logs :
+`spark-ids extract -l logs/* -f features/featuresSSH`
+```
+.
+├── _logs
+|   ├── broSSHlogs-jan.parquet
+|   ├── broSSHlogs-feb.parquet
+├── _features
+|   ├── featuresSSH.parquet
+├── _anomalies
+├── _inspections
+```
+Then we use only IsolationForest and KMeans as detectors with a new threshold and only the top 20 anomalies :
+`spark-ids detect -f features/features -d "iforest,kmeans" -t 0.75 -n 20 -a anomalies/anomaliesSSH`
+```
+.
+├── _logs
+|   ├── broSSHlogs-jan.parquet
+|   ├── broSSHlogs-feb.parquet
+├── _features
+|   ├── featuresSSH.parquet
+├── _anomalies
+|   ├── anomaliesSSH.csv
+├── _inspections
+```
+Finally we inspect the detected anomalies :
+`spark-ids inspect -a anomalies/anomalies.csv -i inspections/inspectionresultsSSH`
+```
+.
+├── _logs
+|   ├── broSSHlogs-jan.parquet
+|   ├── broSSHlogs-feb.parquet
+├── _features
+|   ├── featuresSSH.parquet
+├── _anomalies
+|   ├── anomaliesSSH.csv
+├── _inspections
+|   ├── inspectionresultsSSH.csv
+```
+
 ## Contributing
 
 For any change to the code, you need to rebuild the project with `sbt assembly`. If you installed `spark-ids` on your machine, you then need to copy the newly computed jar to the installed jar :

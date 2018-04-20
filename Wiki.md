@@ -17,34 +17,44 @@ Finally, the reconstructed logs with the tags and comments are persisted to one 
 
 ## Global Parameters
 
-Every parameter has a flag letter and a consistent name between the configuration and the full flag name. So for every entry `param=...` in `conf/application.conf`, there is a flag `-p, --param <value>`.
+Every parameter has a flag letter and a consistent name between the configuration and the full flag name. So for every entry `param=...` in `conf/application.conf`, there is a corresponding flag `-p, --param <value>`.
 
 The following parameters must be consistent accross the different commands `extract`, `detect` and `inspect` so they must be specified right after `spark-ids`.
 
 - `-f, --featuresschema` : Defines the json file of the schema that describes the different columns, their types, aggregation functions, etc... More details about it can be found in the Features Schema subsection.
-- `-e --extractor` : Defines the name of the entity extractor to use (how to define the source and destination entities based on the fields). Every entity extractor needs the original logs schema to contain some specific columns in order to be used. They are specified by the "Requires" list for each of the following already implemented entity extractors :
+- `-e, --extractor` : Defines the name of the entity extractor to use (how to define the source and destination entities based on the fields). Every entity extractor needs the original logs schema to contain some specific columns in order to be used. They are specified by the "Requires" list for each of the following already implemented entity extractors :
 	- `hostsOnly` : Use only the hostname given by reverse DNS, "NOT_RESOLVED" if it couldn't be resolved. Requires : `["srchost", "dsthost"]`
 	- `ipOnly` : Use only IP addresses. Requires : `["srcip", "dstip"]`
 	- `hostsWithIpFallback` : Use hostname and fallback to the IP address if it couldn't be resolved. Requires : `["srchost", "dsthost", "srcip", "dstip"]`
 	- `hostsWithCountryFallback` : Use hostname and fallback to the country from GeoIP if it couldn't be resolved. Requires : `["srchost","dsthost","srcip_country","dstip_country"]`
 	- `hostsWithOrgFallback` : Use hostname and fallback to the ISP if it couldn't be resolved. Requires : `["srchost","dsthost","srcip_org","dstip_org"]`
-- `-i --interval` : Defines the size of the time window for the aggregation and the logs reconstruction. It uses the [Scala duration notation](https://www.scala-lang.org/api/current/scala/concurrent/duration/package$$DurationInt.html) so `60 min`, `1 day` or `8 hours` are all valid.
-- `-t --trafficmode` : In IDSs, aggregated features are called 'traffic features'. This parameter defines whether aggregation is performed per source or destination entity. It can take 2 values : `src` or `dst`.
+- `-i, --interval` : Defines the size of the time window for the aggregation and the logs reconstruction. It uses the [Scala duration notation](https://www.scala-lang.org/api/current/scala/concurrent/duration/package$$DurationInt.html) so `60 min`, `1 day` or `8 hours` are all valid.
+- `-t, --trafficmode` : In network-based IDSs, aggregated features are called 'traffic features'. This parameter defines whether aggregation is performed per source or destination entity. It can take 2 values : `src` or `dst`.
+- `--help` : Prints all the parameters, their usage and a small description in the console.
 
 ### Extract
 
 The following parameters can be placed after the `extract` command :
 
-- `-l --logspath` : Input path for the logs. The logs must be stored in `.parquet` format. The only requirement regarding columns is to have a `timestamp` column. The entity extractors described in the previous subsection might require additional columns. The path accepts wildcards or any other format specific to the file system used. So the example in HDFS the following can all be valid : `todaylogs.parquet`, `januarylogs/*`, `logs/year=2018/*/*/*`, `logs/year=2018/month=0{2,3}/*/*`.
-- `-s --scalemode` : Defines how the features are scaled in order to be used by machine learning algorithms. Currently it accepts two modes :
+- `-l, --logspath` : Input path for the logs. The logs must be stored in `.parquet` format. The only requirement regarding columns is to have a `timestamp` column. The entity extractors described in the previous subsection might require additional columns. The path accepts wildcards or any other format specific to the file system used. So the example in HDFS the following can all be valid : `todaylogs.parquet`, `januarylogs/*`, `logs/year=2018/*/*/*`, `logs/year=2018/month=0{2,3}/*/*`.
+- `-s, --scalemode` : Defines how the features are scaled in order to be used by machine learning algorithms. Currently it accepts two modes :
 	- `unit` : Every row is normalized such that the sum of all the fields is 1.0. More info [here](https://en.wikipedia.org/wiki/Feature_scaling#Scaling_to_unit_length).
 	- `rescale` : Every feature column is rescaled such that the range is [0.0, 1.0]. More info [here](https://en.wikipedia.org/wiki/Feature_scaling#Rescaling).
-- `-f --featuresfile` : Defines the path and name of the file where to write the features to. The extension is `.parquet` and is added automatically to the path. So `featuresfile=myfeatures` will create `myfeatures.parquet`.
-- `-r --recall` : Must be set to `true` if we are testing some model and want to inject intrusions to compute recall in the `inspect` step, `false` otherwise.
-- `-i --intrusions` : Defines the json file that describes the intrusions, the number of instances for each intrusion kind. More details about it can be found in the Intrusions subsection. This parameter has no effect if `recall=false`.
-- `-d --intrusionsdir` : Defines the path of the directory where to persist the computed intrusions and their corresponding fake logs. This parameter has no effect if `recall=false`.
+- `-f, --featuresfile` : Defines the path and name of the file where to write the features to. The extension is `.parquet` and is added automatically to the path. So `featuresfile=myfeatures` will create `myfeatures.parquet`.
+- `-r, --recall` : Must be set to `true` if we are testing some model and want to inject intrusions to compute recall in the `inspect` step, `false` otherwise.
+- `-i, --intrusions` : Defines the json file that describes the intrusions, the number of instances for each intrusion kind. More details about it can be found in the Intrusions subsection. This parameter has no effect if `recall=false`.
+- `-d, --intrusionsdir` : Defines the path of the directory where to persist the computed intrusions and their corresponding fake logs. This parameter has no effect if `recall=false`.
 
 ### Detect
+
+The following parameters can be placed after the `detect` command :
+
+- `-f, --featuresfile` : Defines the path and name of the file where to read the features from. The extension is `.parquet` and is added automatically to the path. So `featuresfile=myfeatures` will try to read from `myfeatures.parquet`. The same parameter is defined for features creation in `extract` but in `conf/application.conf` it is a single parameter.
+- `-d, --detectors` : Defines the detectors to be used for anomaly detection in the following format : `"d1,d2,d3,..."` where `d1`, `d2` and `d3` are the names of the detectors. So far two detectors have been implemented : `iforest` (described in IsolationForest subsection) and `kmeans` (described in KMeans subsection). A third detector using Local Outlier Factor and named `lof` should be implemented soon.
+- `-t, --threshold` : Defines the threshold score value between 0.0 and 1.0 above which aggregated rows are considered anomalies.
+- `-n, --nbtopanomalies` : Defines how many anomalies should be persisted, starting from the anomaly with the highest score and going down in the sorted scores of the detected anomalies.
+- `-a, --anomaliesfile` : Defines the path and name of the file where to write the anomalies to. The extension is `.csv` and is added automatically to the path. So `anomaliesfile=myanomalies` will create `myanomalies.csv`.
+- `-e, --ensemblemode` : Defines the ensemble technique used to combine the scores of the different detectors. Currently two techniques are implemented : `mean` and `max`. Their names are self-explanatory.
 
 ### Inspect
 

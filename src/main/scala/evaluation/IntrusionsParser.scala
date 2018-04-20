@@ -22,13 +22,8 @@ object IntrusionsParser{
 				val name = r("name").asInstanceOf[String]
 				val doc = r("doc").asInstanceOf[String]
 				val number = r("number").asInstanceOf[Int]
-				getIntrusionKind(name, doc).map(ik => (ik, number))
+				IntrusionKind.getByName(name, doc).map(ik => (ik, number))
 			}
 		}yield res
-	}
-
-	private def getIntrusionKind(name: String, doc: String): String\/IntrusionKind = name match{
-		case "tooManyAuthAttempts" => IntrusionKind.tooManyAuthAttempts(doc).right
-		case _ => ("Unknown intrusion kind '"+name+"'").left
 	}
 }

@@ -41,7 +41,7 @@ object IntrusionKind{
 
 	private def timeUDF(r: Random, min: Long, max: Long) = udf((t: Long) => (r.nextDouble()*(max-min)).toLong+min)
 
-	def tooManyAuthAttempts(doc: String) = IntrusionKind("tooManyAuthAttempts", doc,
+	val tooManyAuthAttempts = (doc: String) => IntrusionKind("tooManyAuthAttempts", doc,
 		List("auth_attempts", "srchost"), (df, src, minTimestamp, maxTimestamp) => {
 			val nbAttempts = 200
 			val res = df.sample(true, 0.01).limit(50)
@@ -53,5 +53,12 @@ object IntrusionKind{
 			res
 	})
 
-	val allKinds = List()
+	val allKinds = List(tooManyAuthAttempts)
+
+	def getByName(name: String, doc: String):String\/IntrusionKind = {
+		allKinds.map(f => f(doc)).find(i => i.name==name) match{
+			case Some(ik) => ik.right
+			case None => ("Unknown intrusion kind '"+name+"'").left
+		}
+	}
 }

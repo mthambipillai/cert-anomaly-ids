@@ -41,7 +41,7 @@ object Detector{
 				conf.kMeans.maxNbK, conf.kMeans.elbowRatio, conf.kMeans.nbK, conf.kMeans.lowBound, conf.kMeans.upBound)
 				km.right
 			}
-			case "lof" => new LOFDetector(features).right
+			case "lof" => ???
 			case _ => ("Detector '"+name+"' does not exist.").left
 		}
 	}

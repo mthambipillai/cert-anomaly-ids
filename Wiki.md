@@ -21,7 +21,7 @@ Every parameter has a flag letter and a consistent name between the configuratio
 
 The following parameters must be consistent accross the different commands `extract`, `detect` and `inspect` so they must be specified right after `spark-ids`.
 
-- `-f, --featuresschema` : Defines the json file of the schema that describes the different columns, their types, aggregation functions, etc... More details about it can be found in the Features Schema subsection.
+- `-f, --featuresschema` : Defines the path and name of the json file of the schema that describes the different columns, their types, aggregation functions, etc... More details about it can be found in the Features Schema subsection.
 - `-e, --extractor` : Defines the name of the entity extractor to use (how to define the source and destination entities based on the fields). Every entity extractor needs the original logs schema to contain some specific columns in order to be used. They are specified by the "Requires" list for each of the following already implemented entity extractors :
 	- `hostsOnly` : Use only the hostname given by reverse DNS, "NOT_RESOLVED" if it couldn't be resolved. Requires : `["srchost", "dsthost"]`
 	- `ipOnly` : Use only IP addresses. Requires : `["srcip", "dstip"]`
@@ -42,7 +42,7 @@ The following parameters can be placed after the `extract` command :
 	- `rescale` : Every feature column is rescaled such that the range is [0.0, 1.0]. More info [here](https://en.wikipedia.org/wiki/Feature_scaling#Rescaling).
 - `-f, --featuresfile` : Defines the path and name of the file where to write the features to. The extension is `.parquet` and is added automatically to the path. So `featuresfile=myfeatures` will create `myfeatures.parquet`.
 - `-r, --recall` : Must be set to `true` if we are testing some model and want to inject intrusions to compute recall in the `inspect` step, `false` otherwise.
-- `-i, --intrusions` : Defines the json file that describes the intrusions, the number of instances for each intrusion kind. More details about it can be found in the Intrusions subsection. This parameter has no effect if `recall=false`.
+- `-i, --intrusions` : Defines the path and name of the json file that describes the intrusions, the number of instances for each intrusion kind. More details about it can be found in the Intrusions subsection. This parameter has no effect if `recall=false`.
 - `-d, --intrusionsdir` : Defines the path of the directory where to persist the computed intrusions and their corresponding fake logs. This parameter has no effect if `recall=false`.
 
 ### Detect
@@ -57,6 +57,13 @@ The following parameters can be placed after the `detect` command :
 - `-e, --ensemblemode` : Defines the ensemble technique used to combine the scores of the different detectors. Currently two techniques are implemented : `mean` and `max`. Their names are self-explanatory.
 
 ### Inspect
+
+The following parameters can be placed after the `inspect` command :
+
+- `-a, --anomaliesfile` : Defines the path and name of the file where to read the anomalies from. The extension is `.csv` and is added automatically to the path. So `anomaliesfile=myanomalies` will try to read `myanomalies.csv`. The same parameter is defined for anomalies detection in `detect` but in `conf/application.conf` it is a single parameter.
+- `-r, --rules` : Defines the path and name of the json file that describes the inspection rules and their parameters. More details about it can be found in the Rules subsection.
+- `-i, --inspectionfiles` : Defines the path and name of the files where to write the anomalies to. If the amount of logs per anomaly is not too large, there will be one file per anomaly, otherwise some anomaly logs might be split in different files. The extension is `.csv` and is added automatically to the path. So `inspectionfiles=myinspection` will create files like `myinspection-part0001.csv`.
+- `-d, --intrusionsdir` : Defines the path of the folder where to read the injected intrusions and their logs from in case we want to compute recall. This parameter has no effect if `recall=false`. The same parameter is defined for intrusions injection in `extract` but in `conf/application.conf` it is a single parameter.
 
 ### Features Schema
 

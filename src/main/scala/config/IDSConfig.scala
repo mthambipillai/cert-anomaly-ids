@@ -95,8 +95,8 @@ object IDSConfig{
             c.copy(anomaliesFile = x) ).text("CSV file to read the detected anomalies from."),
           opt[String]('r', "rules").action( (x, c) =>
             c.copy(rules = RulesParser.parse(x).getOrElse(Nil)) ).text("Source of rules."),
-          opt[String]('i', "inspectionresultsfile").action( (x, c) =>
-            c.copy(inspectionResults = x) ).text("CSV file to write the results of the inspection."),
+          opt[String]('i', "inspectionfiles").action( (x, c) =>
+            c.copy(inspectionResults = x) ).text("CSV files to write the results of the inspection to."),
           opt[String]('d', "intrusionsdir").action( (x, c) =>
             c.copy(intrusionsDir = x) ).text("Folder to read the injected intrusions from.")
         )
@@ -123,7 +123,7 @@ object IDSConfig{
         "Could not parse int for 'topAnomalies'")
       anomaliesFile = config.getString("anomaliesfile")
       rules <- RulesParser.parse(config.getString("rules"))
-      inspectionResults = config.getString("resultsfile")
+      inspectionResults = config.getString("inspectionfiles")
       recall <- Try(config.getBoolean("recall")).toDisjunction.leftMap(e =>
         "Could not parse boolean for 'recall'")
       intrusions <- IntrusionsParser.parse(config.getString("intrusions"))

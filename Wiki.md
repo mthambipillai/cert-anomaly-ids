@@ -17,7 +17,7 @@ Finally, the reconstructed logs with the tags and comments are persisted to one 
 
 ## Global Parameters
 
-Every parameter has flag letter and a consistent name between the configuration and the full flag name. So for every entry `param=...` in `conf/application.conf`, there is a flag `-p, --param <value>`.
+Every parameter has a flag letter and a consistent name between the configuration and the full flag name. So for every entry `param=...` in `conf/application.conf`, there is a flag `-p, --param <value>`.
 
 The following parameters must be consistent accross the different commands `extract`, `detect` and `inspect` so they must be specified right after `spark-ids`.
 
@@ -32,6 +32,17 @@ The following parameters must be consistent accross the different commands `extr
 - `-t --trafficmode` : In IDSs, aggregated features are called 'traffic features'. This parameter defines whether aggregation is performed per source or destination entity. It can take 2 values : `src` or `dst`.
 
 ### Extract
+
+The following parameters can be placed after the `extract` command :
+
+- `-l --logspath` : Input path for the logs. The logs must be stored in `.parquet` format. The only requirement regarding columns is to have a `timestamp` column. The entity extractors described in the previous subsection might require additional columns. The path accepts wildcards or any other format specific to the file system used. So the example in HDFS the following can all be valid : `todaylogs.parquet`, `januarylogs/*`, `logs/year=2018/*/*/*`, `logs/year=2018/month=0{2,3}/*/*`.
+- `-s --scalemode` : Defines how the features are scaled in order to be used by machine learning algorithms. Currently it accepts two modes :
+	- `unit` : Every row is normalized such that the sum of all the fields is 1.0. More info [here](https://en.wikipedia.org/wiki/Feature_scaling#Scaling_to_unit_length).
+	- `rescale` : Every feature column is rescaled such that the range is [0.0, 1.0]. More info [here](https://en.wikipedia.org/wiki/Feature_scaling#Rescaling).
+- `-f --featuresfile` : Defines the path and name of the file where to write the features to. The extension is `.parquet` and is added automatically to the path. So `featuresfile=myfeatures` will create `myfeatures.parquet`.
+- `-r --recall` : Must be set to `true` if we are testing some model and want to inject intrusions to compute recall in the `inspect` step, `false` otherwise.
+- `-i --intrusions` : Defines the json file that describes the intrusions, the number of instances for each intrusion kind. More details about it can be found in the Intrusions subsection. This parameter has no effect if `recall=false`.
+- `-d --intrusionsdir` : Defines the path of the directory where to persist the computed intrusions and their corresponding fake logs. This parameter has no effect if `recall=false`.
 
 ### Detect
 

@@ -36,6 +36,7 @@ Consider the following directory structure :
 ├── _inspections
 ```
 We first extract features from the logs :
+
 `spark-ids extract -l logs/* -f features/featuresSSH`
 ```
 .
@@ -48,6 +49,7 @@ We first extract features from the logs :
 ├── _inspections
 ```
 Then we use only IsolationForest and KMeans as detectors with a new threshold and only the top 20 anomalies :
+
 `spark-ids detect -f features/features -d "iforest,kmeans" -t 0.75 -n 20 -a anomalies/anomaliesSSH`
 ```
 .
@@ -61,6 +63,7 @@ Then we use only IsolationForest and KMeans as detectors with a new threshold an
 ├── _inspections
 ```
 Finally we inspect the detected anomalies :
+
 `spark-ids inspect -a anomalies/anomalies.csv -i inspections/inspectionresultsSSH`
 ```
 .

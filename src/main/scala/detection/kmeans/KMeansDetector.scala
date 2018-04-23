@@ -81,22 +81,22 @@ class KMeansDetector(spark: SparkSession, data: DataFrame, trainRatio: Double, m
 		println("Finding optimal model...")
 		var nbK = minNbK
 		var model = km.setK(nbK).fit(train)
-		var prevWSSSE = model.computeCost(train)
+		var prevWSSE = model.computeCost(train)
 		nbK = nbK + 1
 		model = km.setK(nbK).fit(train)
-		var newWSSSE = model.computeCost(train)
-		var oldDiff = prevWSSSE - newWSSSE
+		var newWSSE = model.computeCost(train)
+		var oldDiff = prevWSSE - newWSSE
 		var newDiff = 0.0
 		var ratio = elbowRatio
-		prevWSSSE = newWSSSE
+		prevWSSE = newWSSE
 		while(ratio >= elbowRatio && ratio < 1.0 && nbK < maxNbK){
 			nbK = nbK + 1
 			model = km.setK(nbK).fit(train)
-			newWSSSE = model.computeCost(train)
-			newDiff = prevWSSSE - newWSSSE
+			newWSSE = model.computeCost(train)
+			newDiff = prevWSSE - newWSSE
 			ratio = newDiff/oldDiff
 			oldDiff = newDiff
-			prevWSSSE = newWSSSE
+			prevWSSE = newWSSE
 			println(ratio+" "+newDiff)
 		}
 		model

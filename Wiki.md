@@ -146,6 +146,28 @@ Note that the statistics files for `"ssh_srcip"`, `"ssh_dsthost"`, `"ssh_client"
 
 ## Detector-specific Parameters
 
+Each of the already implemented detectors has parameters to tune the efficiency of the machine learning algorithm. These parameters cannot be changed through the command line interface but only in the `conf/application.conf` file.
+
 ### IsolationForest
 
+IsolationForest is an anomaly detection algorithm adapted from the RandomForest algorithm. The main idea is that if a point is isolated in a data space, its path in a decision tree will be much shorter because after a few splits it becomes the only data point in that subspace and no further splitting is possible. IsolationForest creates a number of IsolationTrees, each one takes a set of samples from the data to compute the splitting decisions. Then each point in the dataset goes through each tree to compute the average path length which are then mapped to anomaly scores such that shorter path lengths have scores closer to 1.0.
+
+The following parameters can be tuned :
+
+- `nbtrees` : The number of IsolationTrees to use.
+- `nbsamples` : The number of samples to use to build an IsolationTree.
+
 ### KMeans
+
+KMeans is a clustering algorithm that divides the dataset into a specific number of clusters. The clusters are computed from a subset of the data (trainset) and the rest of the data can be assigned to the already computed clusters. Points inside clusters with sizes smaller than a specific value can be considered anomalies with 1.0 scores. Similarly, points inside clusters with sizes greater than a specific value can be considered normal with 0.0 scores. All points in cluster with sizes between these 2 boundaries can be linearly mapped to scores between 0.0 and 1.0 according to the cluster size.
+The number of cluster can be set explicitly or computed with the elbow technique : we apply the algorithm to the train set iteratively from a minimum number of clusters to a maximum number of clusters, each time computing the within-cluster sum of squared errors (WSSE), according to the elbow technique the WSSE should decrease at a fast rate until at some point it 'suddenly' decreases a lot slower. The number of clusers at this point should be the optimal number of clusters.
+
+The following parameters can be tuned :
+
+- `trainratio` : The percentage value between 0.0 and 1.0 of the data to be used as a trainset.
+- `minnbk` : The minimum number of clusters when using the elbow technique.
+- `maxnbk` : The maximum number of clusters when using the elbow technique.
+- `elbowratio` : Defines the ratio between 0.0 and 1.0 at which the WSSE should decrease 'fast', when the ratio hits a value below this threshold, the current number of clusters is used.
+- `nbk` : The number of clusters to use in case we want to set it explicitly, should be -1 if we want to use the elbow technique instead.
+- `lowbound` : Defines the cluster size below which points are considered anomalies with 1.0 score.
+- `upbound` : Defines the cluster size above which points are considered normal with 0.0 score.

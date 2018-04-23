@@ -83,10 +83,30 @@ A schema has 2 fields : `name`, which simply defines the name of the schema, and
 - `name` : Features can be either 'top' features that are columns in the original logs schema (in which case this field must match one of the columns' names), or they can be computed from another feature in the schema.
 - `parent` : In the case the feature is computed from another feature, this field defines the name of that parent feature. In the case the feature is a 'top' feature this field is `null`.
 - `type` : Describes the data type of the feature so that we know how to parse it to `Double`. Currently supported values are : `["Boolean", "Int", "String", "Long", "Host", "Day", "Hour"]`. The `"Host"` type should be used when the column defines a DNS hostname, `"Day"` and `"Hour"` should be used when the column contains UNIX timestamps in milliseconds as `Long`s.
-- `doc` : Relevant documentation for the feature
+- `doc` : Relevant documentation for the feature.
 - `aggs` : List of aggregation functions to use to extract traffic features in the `extract` phase. Possible values are : `["mostcommon", "countdistinct", "mean", "sum", "max", "min"]`.
 
 ### Intrusions
+
+An intrusion kind defines how intrusions are injected, on which fields, etc. An intrusion is the set of resulting fake logs after injecting an intrusion kind. The intrusion comes with a signature and a begin and end timestamps. The time range of the original logs will define the range of injection for each intrusion kind, but the implementation of the intrusion kind itself will decide where exactly to inject the intrusions.
+
+The intrusions to inject are defined in a json file. The path and name of this file are described by the `intrusions` parameter. A sample description of intrusions can be found in `conf/intrusions.json`.
+
+Like the features schema, it has 2 fields : `name`, which simply defines the name of the intrusions schema, and `intrusions` which is an array of intrusions kinds where each intrusion kind element has the following structure :
+
+```
+{
+	"name" : "intrusionkindname",
+	"doc" : "Description of the intrusion kind",
+	"requiredcolumns" : ["col1", "col2", ...],
+	"number" : 3
+}
+```
+
+- `name` : The name of the intrusion kind.
+- `doc` : Relevant documentation for the intrusion kind.
+- `requiredcolumns` : List of columns of the original logs schema that must be present because the intrusion kind will use these fields.
+- `number` : Defines how many intrusions of that kind should be injected in the logs.
 
 ### Rules
 

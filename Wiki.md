@@ -67,6 +67,25 @@ The following parameters can be placed after the `inspect` command :
 
 ### Features Schema
 
+The features schema is provided as a json file. The path and name of this file are described by the `featuresschema` parameter. A sample schema can be found in `conf/BroSSHfeatures.json`.
+
+A schema has 2 fields : `name`, which simply defines the name of the schema, and `features` which is an array of features where each feature element has the following structure :
+```
+{
+	"name" : "featurename",
+	"parent" : "parentfeature"|null,
+	"type" : "Datatype",
+	"doc" : "Description of the feature",
+	"aggs" : ["agg1","agg2","agg3",...]
+}
+```
+
+- `name` : Features can be either 'top' features that are columns in the original logs schema (in which case this field must match one of the columns' names), or they can be computed from another feature in the schema.
+- `parent` : In the case the feature is computed from another feature, this field defines the name of that parent feature. In the case the feature is a 'top' feature this field is `null`.
+- `type` : Describes the data type of the feature so that we know how to parse it to `Double`. Currently supported values are : `["Boolean", "Int", "String", "Long", "Host", "Day", "Hour"]`. The `"Host"` type should be used when the column defines a DNS hostname, `"Day"` and `"Hour"` should be used when the column contains UNIX timestamps in milliseconds as `Long`s.
+- `doc` : Relevant documentation for the feature
+- `aggs` : List of aggregation functions to use to extract traffic features in the `extract` phase. Possible values are : `["mostcommon", "countdistinct", "mean", "sum", "max", "min"]`.
+
 ### Intrusions
 
 ### Rules

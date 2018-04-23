@@ -88,9 +88,9 @@ A schema has 2 fields : `name`, which simply defines the name of the schema, and
 
 ### Intrusions
 
-An intrusion kind defines how intrusions are injected, on which fields, etc. An intrusion is the set of resulting fake logs after injecting an intrusion kind. The intrusion comes with a signature and a begin and end timestamps. The time range of the original logs will define the range of injection for each intrusion kind, but the implementation of the intrusion kind itself will decide where exactly to inject the intrusions.
-
 The intrusions to inject are defined in a json file. The path and name of this file are described by the `intrusions` parameter. A sample description of intrusions can be found in `conf/intrusions.json`.
+
+An intrusion kind defines how intrusions are injected, on which fields, etc. An intrusion is the set of resulting fake logs after injecting an intrusion kind. The intrusion comes with a signature and a begin and end timestamps. The time range of the original logs will define the range of injections for each intrusion kind, but the implementation of the intrusion kind itself will decide where exactly to inject the intrusions.
 
 Like the features schema, it has 2 fields : `name`, which simply defines the name of the intrusions schema, and `intrusions` which is an array of intrusions kinds where each intrusion kind element has the following structure :
 
@@ -103,12 +103,46 @@ Like the features schema, it has 2 fields : `name`, which simply defines the nam
 }
 ```
 
-- `name` : The name of the intrusion kind.
+- `name` : The name of the intrusion kind which must be already implemented with that name. For now there is only one implemented intrusion kind : `tooManyAuthAttempts`, which creates some connections of a same fake source host, each one with a very high number of attempts.
 - `doc` : Relevant documentation for the intrusion kind.
 - `requiredcolumns` : List of columns of the original logs schema that must be present because the intrusion kind will use these fields.
 - `number` : Defines how many intrusions of that kind should be injected in the logs.
 
 ### Rules
+
+The rules for the inspection are defined in a json file. The path and name of this file are described by the `rules` parameter. A sample schema can be found in `conf/rules.json`.
+
+Each rule can be either a 'simple rule' or a 'complex rule'. A simple rule will analyze each log entry of the anomaly independantly and check if it matches the rule. A complex rule will analyze all log entries of the anomaly with an aggregation function and check if the result of the aggregation matches the rule.
+
+Two columns will be added to the original logs schema : `anomalytag` and `comments`. The `anomalytag` column is always empty for every log entry except the first one of the anomaly and it can take 2 values : "yes" or "?". "yes" means that at least one of the log entries matched at least one of the rule so we know the anomaly is a true positive according to the rules. "?" means that no log matched any of the rules so we don't know if the anomaly is a true or false positive, the user should investigate himself/herself.
+The `comments` column is defined for every log entry that matched at least one of the rules. Each rule that matches adds its own text to the field, describing what makes this log abnormal.
+
+A rules' file has 2 fields : `name`, which simply defines the name of the rules' schema, and `rules` which is an array of rules where each rule element has the following structure :
+
+```
+{
+    "name" : "rulename",
+    "params" : ["param1", "param2", ...],
+    "text" : "comment text"
+  }
+```
+
+- `name` : The name of the rule which must be already implemented with that name. See below a list of already implemented rules.
+- `params` : Defines a list of rule-specific string parameters for the rule. They might be filenames or integers that must be parsed in the application or a specific text to pattern match on, etc...
+- "text" : In case the rule finds a match, defines the text to add in the `comments` column to describe why the log was flagged. 
+
+The following rules are already implemented :
+- `"ssh_auth_attempts"` : Checks if the number of attempts in a SSH connection is higher than some value defined by the first parameter in `params`.
+- `"ssh_dstport"` : Checks if the destination port in a SSH connection is not 22. No parameters are needed.
+- `"ssh_version"` : Checks if the version number in a SSH connection is less than the version number described by the first parameter.
+- `"ssh_srcip"` : Checks if the source IP address belongs to a list of known malicious IP addresses. The first parameter should contain the file path and name where these addresses are stored, one per line.
+- `"ssh_dsthost"` : Checks if the destination hostname is very uncommon by looking in a file of most common destination hosts. The first parameter should contain the file path and name where these hosts are stored, one per line in the following format `hostname|||count` where `count` is the number of times this hostname was seen in some log dataset used to compute these statistics.
+- `"ssh_client"` : Checks if the client software used for the SSH connection is very uncommon by looking in a file of most common client softwares. The first parameter should contain the file path and name where these clients are stored, one per line in the following format `client|||count` where `count` is the number of times this client was seen in some log dataset used to compute these statistics.
+- `"ssh_server"` : Similar to `"ssh_client"` but this time for server software.
+- `"ssh_cipher"` : Checks if the cipher algorithm used for the SSH connection is very uncommon by looking in a file of most common ciphers. The first parameter should contain the file path and name where these ciphers are stored, one per line in the following format `cipher|||count` where `count` is the number of times this cipher was seen in some log dataset used to compute these statistics.
+- `"ssh_total_auth_attempts"` : Checks if the number of attempts accross all SSH connections in the anomaly is higher than some value defined by the first parameter in `params`.
+
+Note that the statistics files for `"ssh_srcip"`, `"ssh_dsthost"`, `"ssh_client"`, `"ssh_server"` and `"ssh_cipher"` are not provided in this repository as they contain sensitive and environment-dependant data.
 
 ## Detector-specific Parameters
 

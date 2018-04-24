@@ -101,6 +101,11 @@ object IDSConfig{
             c.copy(intrusionsDir = x) ).text("Folder to read the injected intrusions from.")
         )
     }
+
+  /*
+  Returns an IDSConfig first parsed from 'confFile' and then overriden with the command
+  line arguments 'args'.
+  */
 	def loadConf(args: Array[String], confFile: String):String\/IDSConfig = {
     for{
       configTemp <- Try(ConfigFactory.parseFile(new File(confFile))).toDisjunction.leftMap(e =>

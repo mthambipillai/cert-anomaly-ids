@@ -80,6 +80,10 @@ object RulesParser{
 		case _ => ("Unknown rule '"+name+"'").left
 	}
 
+	/*
+	Tries to resolve the environment variables contained in 'path' if any. Replaces
+	the variables by empty strings if they could not be resolved.
+	*/
 	private def resolvePath(path: String):String = {
 		path.split(File.separator).map{ s => 
 	      if (s.startsWith("$")) scala.util.Properties.envOrElse(s.drop(1), "")

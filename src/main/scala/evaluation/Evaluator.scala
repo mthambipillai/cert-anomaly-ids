@@ -16,10 +16,19 @@ import Scalaz._
 import scala.util.Try
 import org.apache.spark.sql.SaveMode
 
+/*
+Contains methods related to the recall computation. In the `extract` phase, it injects fake
+intrusions in the logs before the computation of the features and persists these intrusions.
+In the `inspect` phase, it loads the intrusions and checks how many were detected.
+*/
 class Evaluator(spark: SparkSession) extends Serializable{
 	private val r = new Random(System.currentTimeMillis())
-	private var intrusions:List[Intrusion] = Nil
 
+	/*
+	Returns a new DataFrame by unioning a DataFrame 'df' with fake injected logs computed by the
+	'intrusionKinds'. All intrusions should happend after 'minTimestamp', before 'maxTimestamp' and last
+	at most 'intrusionTime'. Intrusions will be persisted in 'directory'.
+	*/
 	def injectIntrusions(df: DataFrame, intrusionKinds: List[(IntrusionKind, Int)], minTimestamp: Long,
 		maxTimestamp: Long, intrusionTime: Duration, directory: String):String\/DataFrame = {
 		val maxBeginIntrusionTime = maxTimestamp - intrusionTime.toMillis
@@ -40,6 +49,10 @@ class Evaluator(spark: SparkSession) extends Serializable{
 		}yield resDF
 	}
 
+	/*
+	Loads intrusions from 'directory' and checks for each DataFrame in 'logs' if it
+	matches one of the intrusions. Recall is then printed in the console.
+	*/
 	def evaluateIntrusions(logs: List[DataFrame], directory: String):String\/Unit = {
 		for{
 			intrusions <- loadIntrusions(directory)
@@ -50,6 +63,10 @@ class Evaluator(spark: SparkSession) extends Serializable{
 		}
 	}
 
+	/*
+	Randomly finds a timestamp interval of size 'intrusionTime' such that the beginning
+	is between 'minTimestamp' and 'maxBeginIntrusionTime'.
+	*/
 	private def getInterval(minTimestamp: Long, maxBeginIntrusionTime: Long,
 		intrusionTime: Duration):(Long, Long) = {
 		val minT = (abs(r.nextLong())%(maxBeginIntrusionTime - minTimestamp)) + minTimestamp
@@ -57,6 +74,9 @@ class Evaluator(spark: SparkSession) extends Serializable{
 		(minT, maxT)
 	}
 
+	/*
+	Returns the intrusions among 'intrusions' that match one of the DataFrame in 'logs'.
+	*/
 	private def checkIntrusions(intrusions: List[Intrusion], logs: List[DataFrame]):List[Intrusion] = {
 		//TODO : check with signatures
 		val srcHostIndex = logs.head.columns.indexOf("srchost")
@@ -64,6 +84,10 @@ class Evaluator(spark: SparkSession) extends Serializable{
 		intrusions.filter(i => srcs.contains(i.src))
 	}
 
+	/*
+	Prints the recall from the list of detected intrusions 'detected' and the number 'nbTotal' of total
+	intrusions that should have been detected. Each detected intrusion is also printed.
+	*/
 	private def printRecall(detected: List[Intrusion], nbTotal: Int):Unit = {
 		if(nbTotal==0){
 			println("No known intrusions to check.")
@@ -76,7 +100,7 @@ class Evaluator(spark: SparkSession) extends Serializable{
 		println("Number of known intrusions detected (Recall) : "+nbDetected+"/"+nbTotal+" = "+recall+"%\n")
 	}
 
-	def persistIntrusions(intrusions: List[Intrusion], directory: String):Unit={
+	private def persistIntrusions(intrusions: List[Intrusion], directory: String):Unit={
 		intrusions.zipWithIndex.map{case (intrusion, index) =>
 			val oos = new ObjectOutputStream(new FileOutputStream(directory+"/intrusion"+index, false))
 			oos.writeObject(intrusion)
@@ -84,7 +108,7 @@ class Evaluator(spark: SparkSession) extends Serializable{
 		}
 	}
 
-	def loadIntrusions(directory: String):String\/List[Intrusion]={
+	private def loadIntrusions(directory: String):String\/List[Intrusion]={
 		for{
 			files <- getListOfFiles(directory)
 			fileNames = files.map(_.getName())

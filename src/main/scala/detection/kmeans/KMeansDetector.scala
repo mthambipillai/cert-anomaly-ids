@@ -9,7 +9,9 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types._
-
+/*
+This detector implements the KMeans clustering algorithm. Smaller clusters tend to be anomalies.
+*/
 class KMeansDetector(spark: SparkSession, data: DataFrame, trainRatio: Double, minNbK: Int,
 	maxNbK: Int, elbowRatio: Double, nbK: Int, lowerBoundSize: Long, upperBoundSize: Long) extends Detector{
 
@@ -43,6 +45,11 @@ class KMeansDetector(spark: SparkSession, data: DataFrame, trainRatio: Double, m
 		withScores.filter(withScores("km_score").geq(lit(threshold)))
 	}
 
+	/*
+	Returns a new DataFrame with a score column given 'df' which has a column with assigned cluster id. 'sizes'
+	contains the different cluster sizes. Every size below 'lowerBoundSize' maps to score 1.0, every size above
+	'upperBoundSize' maps to 1.0 and other sizes in between follow a linear mapping from 0.0 to 1.0.
+	*/
 	private def mapToScores(df: DataFrame, sizes: List[Long], lowerBoundSize: Long, upperBoundSize: Long):DataFrame = {
 		val maxSize = scala.math.min(sizes.max.toDouble, upperBoundSize)
 		val minSize = scala.math.max(sizes.min.toDouble, lowerBoundSize)
@@ -77,6 +84,10 @@ class KMeansDetector(spark: SparkSession, data: DataFrame, trainRatio: Double, m
 		res.drop("cluster")
 	}
 
+	/*
+	Returns an optimized model according to the elbow technique to find the
+	optimal number of clusters.
+	*/
 	private def getOptimizedModel(km: KMeans, train: DataFrame):KMeansModel = {
 		println("Finding optimal model...")
 		var nbK = minNbK

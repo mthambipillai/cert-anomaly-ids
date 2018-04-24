@@ -21,13 +21,16 @@ import scalaz._
 import Scalaz._
 
 /*
-API to extract and preprocess features from data.
+Contains methods to extract features from logs, parse them, aggregate them and
+scale them. More details about features extraction can be found in the wiki.
 */
 class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => String\/DataFrame) extends Serializable{
 
 	/*
-	Returns a DataFrame from the file 'filePath' with all the features defined by 'features'
-	as columns. Every feature is parsed to integers or doubles. They need to be further processed before
+	Returns a DataFrame from the file 'filePath' with all the basic features defined by 'features'
+	as columns. Every feature is parsed to doubles. src and dst entities are extracted according
+	to the 'extractor'. If recall computation is activated in the IDSConfig, intrusions are injected
+	with the 'inject' function in the constructor. They need to be further processed before
 	they can be used for machine learning.
 	*/
 	def extractRawBasicFeatures(filePath: String, features: List[Feature],
@@ -53,10 +56,12 @@ class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => Str
 	}
 
 	/*
-	Returns a DataFrame representing the traffic features from the basic features in 'df': aggregation over each interval of size 'interval'
-	per src or dst entity. They need to be further processed before they can be used for machine learning.
+	Returns a DataFrame representing the traffic features from the basic features in 'df' : aggregation over
+	each interval of size 'interval' per src or dst entity defined by 'eType'. They need to be further
+	processed before they can be used for machine learning.
 	*/
-	def extractRawTrafficFeatures(df: DataFrame, features: List[Feature], interval: Duration, eType: String): DataFrame = {
+	def extractRawTrafficFeatures(df: DataFrame, features: List[Feature], interval: Duration,
+		eType: String): DataFrame = {
 		println("Begin to extract traffic features...")
 		val minMax = df.agg(min("timestamp"),max("timestamp")).head
 		val minTime = minMax.getDouble(0)
@@ -73,27 +78,16 @@ class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => Str
 		splits.tail.foldLeft(splits.head){case (df1, df2) => df1.union(df2)}
 	}
 
-	/*
-	Returns a DataFrame representing the traffic features : aggregation over the whole 'df' per src entity,
-	or dst entity.It needs to be further processed before they can be used for machine learning.
-	*/
 	private def aggregate(df: DataFrame, eType: String, aggs: List[Column]): DataFrame = {
 		df.groupBy(eType, eType+"Index").agg(aggs.head, aggs.tail:_*)
 	}
 
 	/*
-	Returns a subspace 'features' from an already extracted DataFrame 'df'.
-	*/
-	def getSubSpaceFeatures(df: DataFrame, features: List[Feature]): DataFrame = {
-		val cols = features.map(f => col(f.name))
-		df.select(cols:_*)
-	}
-
-	/*
 	Returns a DataFrame of final features ready for unsupervised machine learning to be
 	applied from a DataFrame 'df' of raw features. Each feature is normalized and kept as a column.
+	'scaleMode' defines the technique used for feature scaling.
 	*/
-	def getFinalFeaturesAsColumns(df: DataFrame, scaleMode: String = "unit", eType: String): String\/DataFrame = {
+	def getFinalFeaturesAsColumns(df: DataFrame, scaleMode: String, eType: String): String\/DataFrame = {
 		println("Begin to scale the features...")
 		scaleMode match {
 			case "unit" =>  normalizeToUnit(df, eType).right
@@ -102,6 +96,9 @@ class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => Str
 		}
 	}
 
+	/*
+	Returns a DataFrame of final features normalized from 'df'. Each row is scaled such that its norm is 1.0.
+	*/
 	private def normalizeToUnit(df: DataFrame, eType: String): DataFrame = {
 		val schemaB = spark.sparkContext.broadcast(df.dtypes.zipWithIndex.map{case ((colName, colType),index) => 
 			(colName, colType, index)}.filter(_._1!=eType))
@@ -133,6 +130,10 @@ class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => Str
 		Row.fromSeq(Seq(entity, t) ++ scaled.toSeq)
 	}
 
+	/*
+	Returns a DataFrame of final features rescaled from 'df'. The range of each feature is
+	mapped to a 0.0 - 1.0 range.
+	*/
 	private def rescale(df: DataFrame, eType: String): String\/DataFrame = {
 		for{
 			scalesMins <- df.dtypes.filter(_._1!=eType).map{case (colName, colType) =>
@@ -185,16 +186,16 @@ class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => Str
 	}
 
 	/*
-	Returns a DataFrame of final features ready for unsupervised machine learning to be
-	applied from the file 'filePath' with all the features defined by 'features'. Every feature
-	is parsed and normalized. The 'colsMode' parameter defines whether these features are kept in
-	separate columns (value "columns") or assembled in a single vector column (value "assembled"). The
-	src and dst entities are extracted according to the 'extractor' parameter. The aggregation of logs by entities
-	is done over each interval of duration 'interval'. 'trafficMode' defines whether the logs are grouped by "src" or "dst".
+	*Returns a DataFrame of final features ready for unsupervised machine learning to be applied.
+	*@param filePath  source of the DataFrame.
+	*@param features  list of features to parse, aggregate and normalize.
+	*@param extractor  defines the entity extractor to use.
+	*@param interval  time window of the aggregation.
+	*@param trafficMode  defines whether the logs are grouped by "src" or "dst".
+	*@param scaleMode  defines the feature scaling technique to use.
 	*/
-	def extractFeatures(filePath: String, features: List[Feature],
-		extractor: String = "hostsWithIpFallback", interval: Duration,
-		trafficMode: String = "src", scaleMode: String = "unit"): String\/DataFrame = {
+	def extractFeatures(filePath: String, features: List[Feature], extractor: String, interval: Duration,
+		trafficMode: String, scaleMode: String): String\/DataFrame = {
 		val entity = trafficMode+"entity"
 		for{
 			(basic, newFeatures) <- extractRawBasicFeatures(filePath, features, extractor, entity)
@@ -218,10 +219,6 @@ class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => Str
 		df.withColumnRenamed(col, newCol)
 	}
 
-	/*
-	Outputs the counts of the 20 most frequent values for each feature. This function
-	should be used solely to gain insight about the data.
-	*/
 	private def frequentValues(df: DataFrame): Unit = {
 		df.columns.foreach(f => df.groupBy(f).count().orderBy(desc("count")).show())
 		df.columns.foreach(f => df.groupBy(f).count().orderBy(asc("count")).show())

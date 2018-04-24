@@ -21,6 +21,10 @@ import scala.util.Try
 import scalaz._
 import Scalaz._
 
+/*
+Contains methods to execute the different commands of the IDS by calling
+the corresponding handlers.
+*/
 class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 
 	def dispatch(command: String):String\/Unit= command match{

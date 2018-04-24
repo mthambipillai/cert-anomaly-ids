@@ -28,7 +28,7 @@ object MainIDSApp {
     val spark = SparkSession.builder.appName("MainIDSApp").getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
     spark.sparkContext.register(Signer.acc, "signerAccumulator")
-    val idsHome = scala.util.Properties.envOrElse("SPARK_IDS_HOME", "")
+    val idsHome = scala.util.Properties.envOrElse("SPARK_IDS_HOME", ".")
     val finalRes = for{
       conf <- IDSConfig.loadConf(args, idsHome+"/conf/application.conf")
       res <- new Dispatcher(spark, conf).dispatch(conf.mode)

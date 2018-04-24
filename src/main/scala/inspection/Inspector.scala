@@ -19,10 +19,18 @@ import scala.util.Try
 import scalaz._
 import Scalaz._
 
+/*
+Contains methods to load the persisted anomalies, fetch the matching original logs
+from the data source and apply rules to the logs to evaluate precision and persist results.
+*/
 class Inspector(spark: SparkSession){
 	private val dateFormatter = new SimpleDateFormat("dd.MM'-'HH:mm:ss:SSS");
 	private def toDate(df: SimpleDateFormat) = udf((t: Long) => df.format(new Date(t)))
 
+	/*
+	Applies each rule in 'rules' to each of the reconstructed logs in 'allLogs'. Precision is
+	then printed and the tagged results are persisted to 'resultsFile'.
+	*/
 	def inspectLogs(allLogs: List[DataFrame], rules: List[Rule], resultsFile: String):Unit = {
 		val nbCols = allLogs.head.columns.size
 		val tagIndexB = spark.sparkContext.broadcast(nbCols-2)
@@ -30,8 +38,7 @@ class Inspector(spark: SparkSession){
 		val newSchema = allLogs.head.schema
 		val encoder = RowEncoder(newSchema)
 		println("Inspecting logs...")
-		val (tags, dfs) = allLogs.map(df => 
-			flag(df, rules, newSchema, encoder, tagIndexB, commentIndexB)).toList.unzip
+		val dfs = allLogs.map(df => flag(df, rules, newSchema, encoder, tagIndexB, commentIndexB))
 		val all = dfs.tail.foldLeft(dfs.head)(_.union(_))
 
 		printPrecision(all, dfs.size, resultsFile)
@@ -41,6 +48,18 @@ class Inspector(spark: SparkSession){
 		.option("header", "true").save(resultsFile)
 	}
 
+	/*
+	* Returns the reconstructed logs of the anomalies from the original log source as 2 DataFrames :
+	* One for the real logs and one for the fake injected logs if any.
+	* @param filePath  path of the original logs source
+	* @param features  list of features of the schema
+	* @param extractor  name of the entity extractor to use
+	* @param anomaliesFile  file path of the anomalies
+	* @param eType  entity type (src or dst)
+	* @param interval  time window used for aggregation
+	* @param recall  true if we injected fake intrusions, false otherwise.
+	* @param intrusionsDir  directory of the persisted intrusions
+	*/
 	def getAllLogs(filePath: String, features: List[Feature], extractor: String, anomaliesFile: String,
 		eType: String, interval: Duration, recall: Boolean, intrusionsDir: String):String\/(List[DataFrame],List[DataFrame])={
 		val ee = EntityExtractor.getByName(extractor)
@@ -82,6 +101,10 @@ class Inspector(spark: SparkSession){
 		})
 	}
 
+	/*
+	Filter the logs 'all' to count the ones that were flagged as anomalies, then compute
+	precision using 'nbAll' and print it.
+	*/
 	private def printPrecision(all: DataFrame, nbAll:Int, resultsFile: String):Unit = {
 		val nbPositives = all.filter(col("anomalytag")===lit("yes")).count.toInt
 		val nbNegatives = nbAll - nbPositives
@@ -103,6 +126,9 @@ class Inspector(spark: SparkSession){
 		println(text+"\n")
 	}
 
+	/*
+	Loads anomalies in 2 separate lists : one for real anomalies and one for fake injected anomalies.
+	*/
 	private def loadAnoms(anomaliesFile: String, recall: Boolean): String\/(List[Row], List[Row])={
 		println("Loading anomalies...")
 		for{
@@ -112,13 +138,6 @@ class Inspector(spark: SparkSession){
 			injected = if(recall) all.filter(_.getString(0).contains("dummy")) else Nil
 			real = all.filterNot(_.getString(0).contains("dummy"))
 		}yield (real, injected)
-	}
-
-	private def extractFromRow(row: Row, interval: Duration):(String,Long,Long) ={
-		val entity = row.getString(0)
-		val beginTimestamp = row.getString(1).toDouble.toLong
-		val endTimeStamp = beginTimestamp+interval.toMillis
-		(entity, beginTimestamp, endTimeStamp)
 	}
 
 	private def getStmt(row: Row, featuresString: String, interval: Duration,
@@ -143,10 +162,14 @@ class Inspector(spark: SparkSession){
 		df2.select(newCols.head, newCols.tail:_*).coalesce(1)
 	}
 
+	/*
+	Returns a new DataFrame from 'logs' with 2 additional columns : anomalytag and comments. Each rule
+	in 'rules' is applied.
+	*/
 	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType, encoder: ExpressionEncoder[Row],
-		tagIndexB: Broadcast[Int], commentIndexB: Broadcast[Int]):(Boolean, DataFrame) = {
+		tagIndexB: Broadcast[Int], commentIndexB: Broadcast[Int]):DataFrame = {
 		val rulesWithAccsB = spark.sparkContext.broadcast(rules.map(r => (r, r.initAcc(spark))))
-		val tagged = logs.mapPartitions(iter => {
+		logs.mapPartitions(iter => {
 			val rows = iter.toList
 			val tagIndex = tagIndexB.value
 			val commentIndex = commentIndexB.value
@@ -156,7 +179,5 @@ class Inspector(spark: SparkSession){
 			}
 			nRows.toIterator
 		})(encoder)
-		//val finalTag = tagged.head.getString(tagIndexB.value)
-		(true, tagged)
 	}
 }

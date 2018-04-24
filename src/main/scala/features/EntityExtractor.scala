@@ -8,8 +8,7 @@ import Scalaz._
 /*
 An 'Entity' represents either the originator or the responder of the connection.
 An 'EntityExtractor' extracts new features from the existing data and features to
-represents the 2 entities. The user can choose an EntityExtractor from the ones
-implemented in the companion object.
+represents the 2 entities.
 */
 case class EntityExtractor(
 	val name: String,
@@ -38,6 +37,10 @@ case class EntityExtractor(
 		}
 	}
 
+	/*
+	Returns the original column name and the original value that was converted to
+	'entityValue' in the entity extraction phase.
+	*/
 	def reverse(entityValue: String):String\/(String, String) = {
 		val (colType, value) = reverseAux(entityValue)
 		if(requiredColumns.contains("src"+colType) || requiredColumns.contains("dst"+colType)){

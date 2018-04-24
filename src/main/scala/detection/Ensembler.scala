@@ -9,10 +9,19 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.SaveMode
 
+/*
+Contains methods to apply different Detectors on the same data and combine
+the different resulting scores into a single score.
+*/
 class Ensembler(){
 
 	private val meanUDF = udf((score1: Double, score2: Double) => (score1+score2)/2.0)
 	private val maxUDF = udf((score1: Double, score2: Double) => scala.math.max(score1, score2))
+
+	/*
+	Apply all detectors on the DataFrame passed to their constructor with 'threshold', then
+	combine the different scores with the UDF defined by 'ensembleMode'.
+	*/
 	def detectAndCombine(eType:String, ensembleMode: String, threshold: Double,
 		detectors: List[Detector]):String\/DataFrame = {
 		for(
@@ -28,6 +37,9 @@ class Ensembler(){
 		}
 	}
 
+	/*
+	Sorts the anomalies in 'detected' and writes the top 'nbTop' of them to 'destFile'.
+	*/
 	def persistAnomalies(detected: DataFrame, trafficMode: String, nbTop: Int, destFile: String):Unit = {
 		val eType = trafficMode+"entity"
 		val distDetected = detected.dropDuplicates(Array(trafficMode+"entity", "timeinterval"))
@@ -52,6 +64,9 @@ class Ensembler(){
 		combined.drop("scaled"+eType+"Index", "scaledtimeinterval")
 	}
 
+	/*
+	Joins the 2 DataFrame 'anomalies1' and 'anomalies2' and combine their scores with 'eUDF'.
+	*/
 	private def combine2(eType: String, eUDF: UserDefinedFunction, threshold: Double,
 		anomalies1: DataFrame, anomalies2: DataFrame):DataFrame = {
 		val cols = anomalies2.columns.filterNot(c => c.contains("score")).toSeq

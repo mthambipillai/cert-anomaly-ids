@@ -11,9 +11,10 @@ import java.util.Calendar;
 import java.util.TimeZone;
 
 /*
-Each basic 'Feature' is taken from a field in the bro_conn logs and must
-provide a way to convert its data type to integers or doubles (so that they can
-be used later by machine learning techniques).
+Each basic 'Feature' is taken from a field in the logs and must
+provide a way to parse its data type to doubles. It also has a list
+of aggregation functions. More details about feature extraction can be
+found in FeaturesExtractor and in the wiki.
 */
 case class Feature(
 	val name: String,
@@ -120,17 +121,23 @@ object Feature{
 		indexer.fit(df2).transform(df2)
 	}
 
-	private val hourFormatter = new SimpleDateFormat("HH");
+	private val hourFormatter = new SimpleDateFormat("HH")
 	private def toHour(sdf: SimpleDateFormat) = udf((t: Long) => sdf.format(new Date(t)).toDouble)
+	/*
+	Converts a column of timestamps in milliseconds as Longs to hours of the day as Doubles.
+	*/
 	def parseHourCol(df: DataFrame, columnName: String): DataFrame = {
 		df.withColumn("hour", toHour(hourFormatter)(df("timestamp")))
 	}
 
-	private val cal = Calendar.getInstance(TimeZone.getDefault());
+	private val cal = Calendar.getInstance(TimeZone.getDefault())
 	private def toDay(cal: Calendar) = udf((t: Long) => {
 		cal.setTimeInMillis(t)
 		cal.get(Calendar.DAY_OF_WEEK).toDouble
 	})
+	/*
+	Converts a column of timestamps in milliseconds as Longs to day of the week as Doubles.
+	*/
 	def parseDayCol(df: DataFrame, columnName: String): DataFrame = {
 		df.withColumn("day", toDay(cal)(df("timestamp")))
 	}

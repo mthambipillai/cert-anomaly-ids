@@ -151,6 +151,7 @@ Each of the already implemented detectors has parameters to tune the efficiency 
 ### IsolationForest
 
 IsolationForest is an anomaly detection algorithm adapted from the RandomForest algorithm. The main idea is that if a point is isolated in a data space, its path in a decision tree will be much shorter because after a few splits it becomes the only data point in that subspace and no further splitting is possible. IsolationForest creates a number of IsolationTrees, each one takes a set of samples from the data to compute the splitting decisions. Then each point in the dataset goes through each tree to compute the average path length which are then mapped to anomaly scores such that shorter path lengths have scores closer to 1.0.
+More details about IsolationForest can be found [here](https://cs.nju.edu.cn/zhouzh/zhouzh.files/publication/icdm08b.pdf).
 
 The following parameters can be tuned :
 
@@ -161,6 +162,7 @@ The following parameters can be tuned :
 
 KMeans is a clustering algorithm that divides the dataset into a specific number of clusters. The clusters are computed from a subset of the data (trainset) and the rest of the data can be assigned to the already computed clusters. Points inside clusters with sizes smaller than a specific value can be considered anomalies with 1.0 scores. Similarly, points inside clusters with sizes greater than a specific value can be considered normal with 0.0 scores. All points in cluster with sizes between these 2 boundaries can be linearly mapped to scores between 0.0 and 1.0 according to the cluster size.
 The number of cluster can be set explicitly or computed with the elbow technique : we apply the algorithm to the train set iteratively from a minimum number of clusters to a maximum number of clusters, each time computing the within-cluster sum of squared errors (WSSE), according to the elbow technique the WSSE should decrease at a fast rate until at some point it 'suddenly' decreases a lot slower. The number of clusers at this point should be the optimal number of clusters.
+More details about KMeans can be found [here](https://en.wikipedia.org/wiki/K-means_clustering).
 
 The following parameters can be tuned :
 

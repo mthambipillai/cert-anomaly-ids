@@ -1,10 +1,7 @@
 package inspection
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
-import scala.io.Source
 import org.apache.spark.util.DoubleAccumulator
 
 /*

@@ -14,7 +14,7 @@ libraryDependencies ++= Seq(
     "org.scalaz" %% "scalaz-core" % "7.2.21"
   )
 
-scalacOptions ++= Seq("-deprecation","-feature")
+scalacOptions ++= Seq("-deprecation","-feature","-Ywarn-unused-import")
 
 assemblyMergeStrategy in assembly := {
  case PathList("META-INF", xs @ _*) => MergeStrategy.discard

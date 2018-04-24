@@ -10,7 +10,6 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.Await
-import scala.util.{Try,Success,Failure}
 import scala.concurrent.duration._
 
 /*

@@ -9,6 +9,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types._
+
 /*
 This detector implements the KMeans clustering algorithm. Smaller clusters tend to be anomalies.
 */

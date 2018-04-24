@@ -5,8 +5,6 @@ import org.apache.spark.sql.Column
 import org.apache.spark.ml.feature.StringIndexer
 import java.util.Date
 import java.text.SimpleDateFormat
-import java.math.BigInteger
-import java.net.{UnknownHostException, InetAddress}
 import java.util.Calendar;  
 import java.util.TimeZone;
 

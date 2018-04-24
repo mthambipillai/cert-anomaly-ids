@@ -2,16 +2,8 @@ package features
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.Row
-import org.apache.spark.rdd.RDD
-import org.apache.spark.ml.feature.VectorAssembler
-import org.apache.spark.ml.feature.Normalizer
-import org.apache.spark.ml.feature.MinMaxScaler
-import org.apache.spark.ml.feature.StandardScaler
 import org.apache.spark.sql.functions._
 import scala.concurrent.duration._
-import org.apache.spark.mllib.linalg.{Vector, Vectors}
-import scala.language.postfixOps
-import evaluation._
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
@@ -103,7 +95,6 @@ class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => Str
 		val schemaB = spark.sparkContext.broadcast(df.dtypes.zipWithIndex.map{case ((colName, colType),index) => 
 			(colName, colType, index)}.filter(_._1!=eType))
 		val eTypeIndexB = spark.sparkContext.broadcast(df.columns.indexOf(eType))
-		import spark.implicits._
 		val entityField = StructField(eType, StringType, true)
 		val timeField = StructField("timeinterval", DoubleType, true)
 		val newSchema = StructType(Seq(entityField, timeField)++schemaB.value.map(sf => 

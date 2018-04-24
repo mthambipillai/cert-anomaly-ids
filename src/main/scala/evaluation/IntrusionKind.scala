@@ -1,9 +1,6 @@
 package evaluation
-import features.Feature
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.Row
 import scala.util.Random
-import scala.math.abs
 import org.apache.spark.sql.functions._
 import scalaz._
 import Scalaz._

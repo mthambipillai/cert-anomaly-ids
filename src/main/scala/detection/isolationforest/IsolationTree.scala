@@ -1,8 +1,6 @@
 package isolationforest
-import org.apache.spark.sql.DataFrame
 import scala.util.Random
 import org.apache.spark.sql.functions._
-import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import scala.math.log
 import org.apache.spark.sql.Row
 

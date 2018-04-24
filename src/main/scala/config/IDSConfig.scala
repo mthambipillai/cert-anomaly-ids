@@ -1,6 +1,6 @@
 package config
 import java.io.File
-import com.typesafe.config.{ Config, ConfigFactory }
+import com.typesafe.config.ConfigFactory
 import features.Feature
 import features.FeaturesParser
 import scala.concurrent.duration._

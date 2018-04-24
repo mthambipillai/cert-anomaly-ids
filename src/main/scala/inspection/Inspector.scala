@@ -6,10 +6,7 @@ import features._
 import org.apache.spark.sql.functions._
 import java.util.Date
 import java.text.SimpleDateFormat
-import org.apache.spark.sql.Column
-import scala.io.Source
 import org.apache.spark.sql.Row
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder

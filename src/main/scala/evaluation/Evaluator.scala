@@ -5,16 +5,9 @@ import org.apache.spark.sql.DataFrame
 import scala.math.abs
 import scala.util.Random
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.SaveMode
 import java.io._
-import au.com.bytecode.opencsv.CSVWriter
-import scala.collection.mutable.ListBuffer
-import org.apache.spark.sql.SaveMode
 import scalaz._
 import Scalaz._
-import scala.util.Try
-import org.apache.spark.sql.SaveMode
 
 /*
 Contains methods related to the recall computation. In the `extract` phase, it injects fake

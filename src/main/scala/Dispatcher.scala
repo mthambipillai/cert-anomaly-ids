@@ -1,22 +1,11 @@
 import features._
-import isolationforest._
-import kmeans._
-import scala.concurrent.duration._
-import org.apache.spark.sql.functions._
 import org.apache.spark.sql.SparkSession
-import org.apache.hadoop.security.UserGroupInformation
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SaveMode
 import evaluation._
-import scala.language.postfixOps
-import java.io.File
-import com.typesafe.config.{ Config, ConfigFactory }
 import config._
 import inspection._
 import detection.Ensembler
 import detection.Detector
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 import scala.util.Try
 import scalaz._
 import Scalaz._

@@ -1,6 +1,5 @@
 package evaluation
 import org.apache.spark.util.AccumulatorV2
-import org.apache.spark.sql.DataFrame
 import java.math.BigInteger
 import java.security.MessageDigest
 import org.apache.spark.sql.Row

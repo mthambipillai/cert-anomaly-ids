@@ -1,11 +1,8 @@
 package detection
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 import scalaz._
 import Scalaz._
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types._
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.SaveMode
 

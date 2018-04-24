@@ -1,9 +1,7 @@
 package evaluation
-import scala.io._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
-import org.apache.spark.sql.functions._
 import scala.util.Try
 import scalaz._
 import Scalaz._

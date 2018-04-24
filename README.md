@@ -85,13 +85,8 @@ All the other parameters that we didn't explicitly set as flags were defined in 
 
 ## Contributing
 
-This section assumes that the reader is familiar with the content of the [wiki](https://gitlab.cern.ch/mthambip/IDSv2.2/blob/master/Wiki.md).
-
 For any change to the code, you need to rebuild the project with `sbt assembly`. If you installed `spark-ids` on your machine, you then need to copy the newly computed jar to the installed jar :
+
 `sudo cp target/scala-2.11/IDS\ Project-assembly-2.0.jar $SPARK_IDS_HOME/jars/ids.jar`
 
-Here are a few possible extensions :
-- Create a new entity extractor : in `features/EntityExtractor.scala`, in the `object` create a new `EntityExtractor` as a `val` and add it to the list `extractors`. The `name` field of your extractor will be the string you have to specify in `conf/application.conf` or with the `--extractor` flag in order to use it.
-- Create a new kind of intrusion/anomaly : in `evaluation/IntrusionKind.scala`, in the `object` create a new function as a `val` of type `String => IntrusionKind` where the input string is the description of the intrusion kind. Then add it to the list `allKinds`. The `name` field of your intrusion kind will be the string you have to use as name in the json file specified by `intrusions` in `conf/application.conf` or by the `--intrusions` flag.
-- Create a new anomaly detection algorithm : the main class of your implementation must extend the `detection.Detector` class. Then in the `object` in `detection/Detector.scala`, add a `case` to return a new instance of your `Detector` in the method `getDetector`. The string of the pattern match should be the name of your `Detector` that you will specify in the `detectors` field in `conf/application.conf` or in the `--detectors` flag.
-- Create a new inspection rule : in `inspection/RulesParser.scala`, add a `case` to return your `Rule` in the method `getRule`. The string of the pattern match should be the name of your `Rule` that you have to use in the json file specified by `rules` in `conf/application.conf` or by the `--rules` flag. The parameters of the rule are defined in `params: List[String]`, if you need to parse them to some other data type like `Int`, use proper error handling as in the already implemented rules that involve parsing. `Rule` is abstract so you must implement either a `SimpleRule` (over single log entry) or a `ComplexRule` (over all logs of the anomaly). In case of `SimpleRule`, you should use the generic method `makeSimpleRule` defined in the companion `object`.
+Check out the Contributing section in the [wiki](https://gitlab.cern.ch/mthambip/IDSv2.2/blob/master/Wiki.md) for more details about possible extensions.

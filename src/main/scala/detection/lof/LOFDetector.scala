@@ -3,8 +3,9 @@ import org.apache.spark.ml.outlier.LOF
 import org.apache.spark.sql.DataFrame
 import detection.Detector
 import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.sql.functions._
 
-class LOFDetector(data: DataFrame) extends Detector{
+class LOFDetector(data: DataFrame, k: Int, maxScore: Double) extends Detector{
 
 	private val assembled = {
 		println("\nStarting to build LOF model...\n")
@@ -13,9 +14,29 @@ class LOFDetector(data: DataFrame) extends Detector{
 		assembler.transform(data)
 	}
 
-	private val lofModel = new LOF().setMinPts(5)
+	private val lofModel = new LOF().setMinPts(k)
 
 	override def detect(threshold: Double):DataFrame = {
-		lofModel.transform(assembled).withColumnRenamed("lof", "lof_score")
+		val lofs = mapToScores(lofModel.transform(assembled).drop("index"), maxScore, threshold)
+		val res = assembled.join(lofs, assembled.col("features") === lofs.col("vector"), "inner")
+		.drop("features").drop("vector")
+		res.printSchema
+		res
+	}
+
+	private def scoreUDF(maxScore: Double) = udf((x:Double) => {
+		val temp = x/maxScore
+		if(temp<1.0) temp else 1.0
+	})
+	private def mapToScores(lofs: DataFrame, maxScore: Double, threshold: Double):DataFrame = {
+		val lofThreshold = threshold*maxScore
+		println("new threshold : "+lofThreshold)
+		val minMax = lofs.agg(min("lof"),max("lof")).head
+		val minTime = minMax.getDouble(0)
+		val maxTime = minMax.getDouble(1)
+		println(minTime+" "+maxTime)
+
+		lofs.filter(col("lof").geq(lofThreshold))
+		.withColumn("score_lof",scoreUDF(maxScore)(col("lof"))).drop("lof")
 	}
 }

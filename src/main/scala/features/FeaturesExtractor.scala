@@ -195,13 +195,13 @@ class FeatureExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => Str
 		}yield res
 	}
 
-	def writeFeaturesToFile(features: DataFrame, fileName: String):Unit = {
+	def writeFeaturesToFile(features: DataFrame, fileName: String, statsFileName: String):Unit = {
 		println("Writing features to "+fileName+".parquet...")
 		val w = features.columns.foldLeft(features){(prevdf, col) => rename(prevdf, col)}
 		w.write.mode(SaveMode.Overwrite).parquet(fileName+".parquet")
 		val stats = w.describe()
-		println("Writing features stats to "+fileName+"-stats.parquet...")
-		stats.write.mode(SaveMode.Overwrite).parquet(fileName+"-stats.parquet")
+		println("Writing features stats to "+statsFileName+".parquet...")
+		stats.write.mode(SaveMode.Overwrite).parquet(statsFileName+".parquet")
 	}
 
 	private def rename(df: DataFrame, col: String):DataFrame = {

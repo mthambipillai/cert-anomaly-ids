@@ -3,6 +3,7 @@ import org.apache.spark.sql.DataFrame
 import config.IDSConfig
 import isolationforest.IsolationForest
 import kmeans.KMeansDetector
+import lof.LOFDetector
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import scala.util.Try
@@ -28,10 +29,10 @@ object Detector{
 	def getDetector(spark: SparkSession, name: String, conf: IDSConfig, features: DataFrame):String\/Detector ={
 		name match{
 			case "iforest" => {
-				val fileName = conf.featuresFile+"-stats.parquet"
+				val statsFileName = conf.featuresStatsFile+".parquet"
 				for(
-					stats <- Try(spark.read.parquet(fileName)).toDisjunction.leftMap(e =>
-            			"Could not read '"+fileName+"' because of "+e.getMessage)
+					stats <- Try(spark.read.parquet(statsFileName)).toDisjunction.leftMap(e =>
+            			"Could not read '"+statsFileName+"' because of "+e.getMessage)
 				)yield{
 					val count = stats.filter(col("summary")===lit("count")).agg(sum(stats.columns(1)))
 					.first.getDouble(0).toLong
@@ -45,7 +46,7 @@ object Detector{
 				conf.kMeans.upBound)
 				km.right
 			}
-			case "lof" => ???
+			case "lof" => new LOFDetector(features, 5, 10000000.0).right
 			case _ => ("Detector '"+name+"' does not exist.").left
 		}
 	}

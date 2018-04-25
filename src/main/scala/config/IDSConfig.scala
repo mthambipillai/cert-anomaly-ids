@@ -23,6 +23,7 @@ case class IDSConfig(
 	val scaleMode: String,
   val ensembleMode: String,
   val featuresFile: String,
+  val featuresStatsFile : String,
   val detectors: String,
 	val threshold: Double,
 	val topAnomalies: Int,
@@ -56,10 +57,12 @@ object IDSConfig{
         children(
           opt[String]('l', "logspath").action( (x, c) =>
             c.copy(filePath = x) ).text("Input path for parquet log file(s)."),
-          opt[String]('s', "scalemode").action( (x, c) =>
+          opt[String]('m', "scalemode").action( (x, c) =>
             c.copy(scaleMode = x) ).text("How to scale the features. Can be either unit or rescale."),
           opt[String]('f', "featuresfile").action( (x, c) =>
             c.copy(featuresFile = x) ).text("Parquet file to write the scaled features to."),
+          opt[String]('s', "featuresstatsfile").action( (x, c) =>
+            c.copy(featuresStatsFile = x) ).text("Parquet file to write the features' statistics to."),
           opt[Boolean]('r', "recall").action( (x, c) =>
             c.copy(recall = x) ).text("True if intrusions should be injected to compute recall."),
           opt[String]('i', "intrusions").action( (x, c) =>
@@ -72,6 +75,8 @@ object IDSConfig{
         children(
           opt[String]('f', "featuresfile").action( (x, c) =>
             c.copy(featuresFile = x) ).text("Parquet file to read the scaled features from."),
+          opt[String]('s', "featuresstatsfile").action( (x, c) =>
+            c.copy(featuresStatsFile = x) ).text("Parquet file to read the features' statistics from."),
           opt[String]('d', "detectors").action( (x, c) =>
             c.copy(detectors = x) ).text("Detectors to use. Names separated by commas."),
           opt[Double]('t', "threshold").action( (x, c) =>
@@ -120,6 +125,7 @@ object IDSConfig{
       scaleMode = config.getString("scalemode")
       ensembleMode = config.getString("ensemblemode")
       featuresFile = config.getString("featuresfile")
+      featuresStatsFile = config.getString("featuresstatsfile")
       detectors = config.getString("detectors")
       threshold <- Try(config.getDouble("threshold")).toDisjunction.leftMap(e =>
         "Could not parse double for 'threshold'")
@@ -137,8 +143,8 @@ object IDSConfig{
       kMeans = KMeansConfig.load(config)
 
       fromFile = IDSConfig("", filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
-        ensembleMode, featuresFile, detectors, threshold, topAnomalies, anomaliesFile, rules, inspectionResults,
-        recall, intrusions, intrusionsDir, isolationForest, kMeans)
+        ensembleMode, featuresFile, featuresStatsFile, detectors, threshold, topAnomalies, anomaliesFile,
+        rules, inspectionResults, recall, intrusions, intrusionsDir, isolationForest, kMeans)
       res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
       checkFeatures <- if(res.featuresschema.isEmpty) "Could not parse features.".left else res.right
       checkRules <- if(checkFeatures.rules.isEmpty) "Could not parse rules.".left else checkFeatures.right

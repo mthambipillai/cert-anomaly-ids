@@ -36,7 +36,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 		for(
 			finalFeatures <- fe.extractFeatures(conf.filePath, conf.featuresschema, conf.extractor, conf.interval,
 				conf.trafficMode, conf.scaleMode)
-		)yield fe.writeFeaturesToFile(finalFeatures, conf.featuresFile)
+		)yield fe.writeFeaturesToFile(finalFeatures, conf.featuresFile, conf.featuresStatsFile)
 	}
 
 	private def handleDetect():String\/Unit = {

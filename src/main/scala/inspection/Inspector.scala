@@ -67,11 +67,8 @@ class Inspector(spark: SparkSession){
 				"Could not read '"+filePath+"' because of "+e.getMessage)
 			_ = tempLogFile.createOrReplaceTempView("temp")
 			logFile = spark.sql("SELECT "+featuresString+" FROM temp")
-			tempIntrusionsLogs <- Try(spark.read.parquet(intrusionsDir+"/logs/*")).toDisjunction.leftMap(e =>
-				"Could not read '"+intrusionsDir+"' because of "+e.getMessage)
-			intrusionsLogs = tempIntrusionsLogs.select(featuresNames.head, featuresNames.tail:_*)
 			_ = logFile.createOrReplaceTempView("logfiles")
-			_ = intrusionsLogs.createOrReplaceTempView("injectedLogs")
+			_ <- if(recall) registerIntrusionsLogs(intrusionsDir, featuresNames) else Unit.right
 			(realAnoms, injectedAnoms) <- loadAnoms(anomaliesFile, recall)
 			_ = println("Fetching matching logs...")
 			allLogs <- realAnoms.zipWithIndex.traverseU{case (row,id) =>
@@ -85,7 +82,16 @@ class Inspector(spark: SparkSession){
 					ordered.withColumn("anomalytag",lit("")).withColumn("comments",lit(""))
 				}
 			}
-		}yield (allLogs, getInjectedLogs(injectedAnoms, interval))
+		}yield (allLogs, if(recall) getInjectedLogs(injectedAnoms, interval) else Nil)
+	}
+
+	private def registerIntrusionsLogs(intrusionsDir: String, featuresNames: List[String]):String\/Unit = {
+		val tempIntrusionsLogsDisj = Try(spark.read.parquet(intrusionsDir+"/logs/*"))
+		.toDisjunction.leftMap(e => "Could not read '"+intrusionsDir+"' because of "+e.getMessage)
+		tempIntrusionsLogsDisj.map(logs => {
+			val ordered = logs.select(featuresNames.head, featuresNames.tail:_*)
+			ordered.createOrReplaceTempView("injectedLogs")
+		})
 	}
 
 	private def getInjectedLogs(injectedAnoms: List[Row], interval: Duration):List[DataFrame] = {
@@ -127,7 +133,7 @@ class Inspector(spark: SparkSession){
 	Loads anomalies in 2 separate lists : one for real anomalies and one for fake injected anomalies.
 	*/
 	private def loadAnoms(anomaliesFile: String, recall: Boolean): String\/(List[Row], List[Row])={
-		println("Loading anomalies...")
+		println("Loading anomalies from "+anomaliesFile+"...")
 		for{
 			all <- Try(spark.read.format("com.databricks.spark.csv")
 				.option("header", "true").load(anomaliesFile).collect.toList)

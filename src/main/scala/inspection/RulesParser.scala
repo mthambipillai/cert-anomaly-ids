@@ -70,7 +70,7 @@ object RulesParser{
 					""
 				}
 				if(acc.value>=totalNbAttempts){
-					(true, text::comments.tail)
+					(true, (text+" ("+acc.value+")")::comments.tail)
 				}else{
 					(false, comments)
 				}

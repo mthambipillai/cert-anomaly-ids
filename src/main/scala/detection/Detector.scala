@@ -46,7 +46,7 @@ object Detector{
 				conf.kMeans.upBound)
 				km.right
 			}
-			case "lof" => new LOFDetector(features, 5, 10000000.0).right
+			case "lof" => new LOFDetector(spark, features, 5, 10000000.0).right
 			case _ => ("Detector '"+name+"' does not exist.").left
 		}
 	}

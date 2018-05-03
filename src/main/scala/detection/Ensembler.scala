@@ -29,7 +29,9 @@ class Ensembler(){
 					}
 		)yield{
 			val detected = detectAll(threshold, detectors)
-			println("\nCombining different detectors results with mode '"+ensembleMode+"'...")
+			if(detectors.size > 1){
+				println("\nCombining different detectors results with mode '"+ensembleMode+"'...")
+			}
 			combineAll(eType, eUDF, threshold, detected)
 		}
 	}

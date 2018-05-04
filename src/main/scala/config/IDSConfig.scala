@@ -15,6 +15,7 @@ import Scalaz._
 case class IDSConfig(
 	//Global parameters
 	val mode: String,
+	val logLevel: String,
 	val filePath: String,
 	val featuresschema: List[Feature],
 	val extractor: String,
@@ -42,12 +43,14 @@ case class IDSConfig(
 object IDSConfig{
 	val parser = new scopt.OptionParser[IDSConfig]("spark-ids") {
 		head("Spark-IDS", "1.0")
-		opt[String]('f', "featuresschema").action( (x, c) =>
-			c.copy(featuresschema = FeaturesParser.parse(x).getOrElse(Nil)) ).text("Source of features.")
 		opt[String]('e', "extractor").action( (x, c) =>
 			c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
+		opt[String]('f', "featuresschema").action( (x, c) =>
+			c.copy(featuresschema = FeaturesParser.parse(x).getOrElse(Nil)) ).text("Source of features.")
 		opt[Duration]('i', "interval").action( (x, c) =>
 			c.copy(interval = x) ).text("Interval for aggregation per src/dst entity in Scala Duration format. Default is '60 min'.")
+		opt[String]('l', "loglevel").action( (x, c) =>
+			c.copy(logLevel = x) ).text("Log level of the console.")
 		opt[String]('t', "trafficmode").action( (x, c) =>
 			c.copy(trafficMode = x) ).text("With which entity to aggregate. Can be either src or dst.")
 		help("help").text("Prints this usage text.")
@@ -117,6 +120,7 @@ object IDSConfig{
 				"Could not parse '"+confFile+"' because of "+e.getMessage)
 			config = configTemp.resolve()
 			filePath = config.getString("logspath")
+			logLevel = config.getString("loglevel")
 			featuresschema <- FeaturesParser.parse(config.getString("featuresschema"))
 			extractor = config.getString("extractor")
 			interval <- Try(Duration(config.getString("aggregationtime"))).toDisjunction.leftMap(e =>
@@ -142,7 +146,7 @@ object IDSConfig{
 			isolationForest = IsolationForestConfig.load(config)
 			kMeans = KMeansConfig.load(config)
 
-			fromFile = IDSConfig("", filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
+			fromFile = IDSConfig("", logLevel, filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
 				ensembleMode, featuresFile, featuresStatsFile, detectors, threshold, topAnomalies, anomaliesFile,
 				rules, inspectionResults, recall, intrusions, intrusionsDir, isolationForest, kMeans)
 			res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")

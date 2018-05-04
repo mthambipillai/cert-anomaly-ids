@@ -39,17 +39,9 @@ class LOFtest(spark: SparkSession) extends Serializable{
 		val featuresIndexB = spark.sparkContext.broadcast(featuresIndex)
 		val kB = spark.sparkContext.broadcast(k)
 		val rdd = data.rdd.mapPartitionsWithIndex{ case (pIndex, iter) => {
-			val rows = iter.toArray
 			val featuresIndex = featuresIndexB.value
 			val k = kB.value
-			val distances = computeDistanceMatrix(rows, featuresIndex)
-			val partID = ""+pIndex
-			rows.toList.zipWithIndex.map{ case (r,index) => {
-				val rID = (partID+index).toInt
-				val (kDist, knns) = getKNN(index, distances(index), k, partID)
-				val (ids, dists) = knns.unzip
-				Row.fromSeq(rID +: (r.toSeq ++ Seq(kDist, ids, dists)))
-			}}.toIterator
+			getKDistances(pIndex, iter, featuresIndex, k)
 		}}
 		val idField = StructField("rid", IntegerType, true)
 		val kDistField = StructField("kdist", DoubleType, true)
@@ -61,6 +53,18 @@ class LOFtest(spark: SparkSession) extends Serializable{
 		//the point and each of the knn, k distance is the max value in the vector
 		//kdist = max(d(r,n1),d(r,n2),d(r,n3),...)
 		//r => rid, r, kdist, ((n1id, d(r,n1)),(n2id, d(r,n2)),(n3id, d(r,n3)),...)
+	}
+
+	private def getKDistances(pIndex: Int, iter: Iterator[Row], featuresIndex: Int, k: Int):Iterator[Row] = {
+		val rows = iter.toArray
+		val distances = computeDistanceMatrix(rows, featuresIndex)
+		val partID = ""+pIndex
+		rows.toList.zipWithIndex.map{ case (r,index) => {
+			val rID = (partID+index).toInt
+			val (kDist, knns) = getKNN(index, distances(index), k, partID)
+			val (ids, dists) = knns.unzip
+			Row.fromSeq(rID +: (r.toSeq ++ Seq(kDist, ids, dists)))
+		}}.toIterator
 	}
 
 	private def getKNN(sourceIndex: Int, distancesToOthers: Array[Double], k: Int,

@@ -1,0 +1,71 @@
+image: gitlab-registry.cern.ch/linuxsupport/cc7-base
+
+variables:
+   KOJI_TARGET: 'sec7'
+
+stages:
+  - build
+  - koji
+  - deploy_qa
+  - deploy_stable
+
+sbt_srpm_build:
+  stage: build
+  script:
+    - curl https://bintray.com/sbt/rpm/rpm | tee /etc/yum.repos.d/bintray-sbt-rpm.repo
+    - yum install -y java-1.8.0-openjdk-devel sbt
+    - sbt assembly
+    - yum install -y rpm-build rpmdevtools
+    - rpmbuild -bs package/rpm/${CI_PROJECT_NAME}.spec --define "dist .el7.cern" --define "_topdir $(pwd)/package/build" --define "_sourcedir $(pwd)/target/scala-2.11"
+  artifacts:
+    paths:
+    - package/build/SRPMS/*.el7.cern.src.rpm
+    - target/scala-2.11/*assembly*
+    expire_in: 1 week
+
+.koji_deps_template: &koji_deps
+   before_script:
+     # --exclude needed due to INC1422548
+     - yum install -y --exclude python2-libcomps koji krb5-workstation rpm-build
+     - echo $CERTBUILDPWD | kinit certbuild@CERN.CH
+
+koji_scratch:
+  <<: *koji_deps
+  when: manual
+  stage: koji
+  dependencies:
+    - sbt_srpm_build
+  script:
+    - koji --config=package/rpm/.koji build --scratch --wait $KOJI_TARGET package/build/SRPMS/${CI_PROJECT_NAME}-*.el7.cern.src.rpm
+
+koji_build:
+  <<: *koji_deps
+  only:
+    - tags
+  stage: koji
+  dependencies:
+    - sbt_srpm_build
+  script:
+    - koji --config=package/rpm/.koji build --wait $KOJI_TARGET package/build/SRPMS/${CI_PROJECT_NAME}-${CI_COMMIT_REF_NAME}.el7.cern.src.rpm
+
+koji_qa:
+  <<: *koji_deps
+  only:
+    - tags
+  stage: deploy_qa
+  when: manual
+  dependencies:
+    - koji_build
+  script:
+    - koji --config=package/rpm/.koji tag-pkg $KOJI_TARGET-qa ${CI_PROJECT_NAME}-${CI_COMMIT_REF_NAME}.el7.cern
+
+koji_prod_cc7:
+  <<: *koji_deps
+  only:
+    - tags
+  stage: deploy_stable
+  when: manual
+  dependencies:
+    - koji_qa
+  script:
+    - koji --config=package/rpm/.koji tag-pkg $KOJI_TARGET-stable ${CI_PROJECT_NAME}-${CI_COMMIT_REF_NAME}.el7.cern

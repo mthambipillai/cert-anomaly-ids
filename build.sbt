@@ -1,4 +1,4 @@
-name := "Spark-IDS"
+name := "CERT-Anomaly-IDS"
 
 version := "1.0"
 

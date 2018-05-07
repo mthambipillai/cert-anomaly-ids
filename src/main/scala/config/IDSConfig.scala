@@ -41,8 +41,8 @@ case class IDSConfig(
 )
 
 object IDSConfig{
-	val parser = new scopt.OptionParser[IDSConfig]("spark-ids") {
-		head("Spark-IDS", "1.0")
+	val parser = new scopt.OptionParser[IDSConfig]("cert-anomaly-ids") {
+		head("CERT-Anomaly-IDS", "1.0")
 		opt[String]('e', "extractor").action( (x, c) =>
 			c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
 		opt[String]('f', "featuresschema").action( (x, c) =>

@@ -9,9 +9,9 @@ import Scalaz._
 object MainIDSApp {
 	def main(args: Array[String]) {
 		val t0 = System.nanoTime()
-		val spark = SparkSession.builder.appName("Spark-IDS").getOrCreate()
+		val spark = SparkSession.builder.appName("CERT-Anomaly-IDS").getOrCreate()
 		spark.sparkContext.register(Signer.acc, "signerAccumulator")
-		val idsHome = scala.util.Properties.envOrElse("SPARK_IDS_HOME", ".")
+		val idsHome = scala.util.Properties.envOrElse("CERT_ANOMALY_IDS_HOME", ".")
 		val finalRes = for{
 			conf <- IDSConfig.loadConf(args, idsHome+"/conf/application.conf")
 			status = Try(spark.sparkContext.setLogLevel(conf.logLevel)).toDisjunction.leftMap(e =>

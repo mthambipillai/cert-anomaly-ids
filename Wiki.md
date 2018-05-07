@@ -1,4 +1,4 @@
-# Spark-IDS Wiki
+# CERT-Anomaly-IDS Wiki
 
 ## Overview
 

@@ -45,15 +45,15 @@ case class IDSConfig(
 object IDSConfig{
 	val parser = new scopt.OptionParser[IDSConfig]("cert-anomaly-ids") {
 		head("CERT-Anomaly-IDS", "1.0")
-		opt[String]('e', "extractor").action( (x, c) =>
+		opt[String]("extractor").action( (x, c) =>
 			c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
-		opt[String]('f', "featuresschema").action( (x, c) =>
+		opt[String]("featuresschema").action( (x, c) =>
 			c.copy(featuresschema = FeaturesParser.parse(x).getOrElse(Nil)) ).text("Source of features.")
-		opt[Duration]('i', "interval").action( (x, c) =>
+		opt[Duration]("interval").action( (x, c) =>
 			c.copy(interval = x) ).text("Interval for aggregation per src/dst entity in Scala Duration format. Default is '60 min'.")
-		opt[String]('l', "loglevel").action( (x, c) =>
+		opt[String]("loglevel").action( (x, c) =>
 			c.copy(logLevel = x) ).text("Log level of the console.")
-		opt[String]('t', "trafficmode").action( (x, c) =>
+		opt[String]("trafficmode").action( (x, c) =>
 			c.copy(trafficMode = x) ).text("With which entity to aggregate. Can be either src or dst.")
 		help("help").text("Prints this usage text.")
 

@@ -7,64 +7,104 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import scala.collection.mutable.PriorityQueue
+import org.apache.spark.broadcast.Broadcast
 
-class LOFtest(spark: SparkSession) extends Serializable{
+class LOFtest(spark: SparkSession, k: Int) extends Serializable{
 
 	object KNNOrder extends Ordering[(Int,Double)] {
-		def compare(x:(Int,Double), y:(Int,Double)) = y._2 compare x._2
+		def compare(x:(Int,Double), y:(Int,Double)) = x._2 compare y._2
 	}
 
 	def transform(data: DataFrame):DataFrame = {
 		val featuresIndex = data.columns.indexOf("features")
-
-		//println("before : "+getMeanDist(data.repartition(90).orderBy(rand()), featuresIndex, "c1"))
-
-		val lsh = getHashes(data, featuresIndex).repartition(col("hash")).drop("hash")
-
-		//println("nb parts : "+res.rdd.getNumPartitions)
-		//println("nb hashes : "+res.select("hash").distinct.count)
-		//res.groupBy("hash").count().orderBy(desc("count")).show()
-		//res.groupBy("hash").count().orderBy(asc("count")).show()
-
-		//println("after : "+getMeanDist(res, featuresIndex, "c2"))
-
-		val knn = getKDistances(lsh, featuresIndex, 4)
-		knn.show()
-
-		System.exit(1)
-		knn
-	}
-
-	private def getKDistances(data: DataFrame, featuresIndex: Int, k: Int):DataFrame = {
 		val featuresIndexB = spark.sparkContext.broadcast(featuresIndex)
 		val kB = spark.sparkContext.broadcast(k)
-		val rdd = data.rdd.mapPartitionsWithIndex{ case (pIndex, iter) => {
+
+		val lsh = getHashes(data, featuresIndexB).repartition(col("hash")).drop("hash")
+		println("nb parts : "+lsh.rdd.partitions.size)
+		val rdd = lsh.rdd.mapPartitionsWithIndex{ case (pIndex, iter) => {
 			val featuresIndex = featuresIndexB.value
 			val k = kB.value
-			getKDistances(pIndex, iter, featuresIndex, k)
+			val rows = iter.toArray
+			val withKDists = getKDistances(pIndex, rows, featuresIndex, k)
+			val withReachDists = getReachabilityDistances(withKDists)
+			val withLRDs = getLRDs(withReachDists, k)
+			getLOFs(withLRDs, k).toIterator
 		}}
-		val idField = StructField("rid", IntegerType, true)
-		val kDistField = StructField("kdist", DoubleType, true)
-		val knnIdsField = StructField("knnids", ArrayType(IntegerType), true)
-		val knnDistsField = StructField("knndists", ArrayType(DoubleType), true)
-		val newSchema = StructType(Seq(idField, kDistField, knnIdsField, knnDistsField) ++ data.schema)
-		spark.sqlContext.createDataFrame(rdd, newSchema)
-		//should extend the schema with Vector[Double] of size k representing the distances between
-		//the point and each of the knn, k distance is the max value in the vector
-		//kdist = max(d(r,n1),d(r,n2),d(r,n3),...)
-		//r => rid, r, kdist, ((n1id, d(r,n1)),(n2id, d(r,n2)),(n3id, d(r,n3)),...)
+		val lofField = StructField("lof", DoubleType, true)
+		val newSchema = StructType(data.schema ++ Seq(lofField))
+		val res = spark.sqlContext.createDataFrame(rdd, newSchema)
+		res
 	}
 
-	private def getKDistances(pIndex: Int, iter: Iterator[Row], featuresIndex: Int, k: Int):Iterator[Row] = {
-		val rows = iter.toArray
+	private def getKDistances(pIndex: Int, rows: Array[Row], featuresIndex: Int, k: Int):List[Row] = {
+		//println("Computing KNNs and their distances...")
 		val distances = computeDistanceMatrix(rows, featuresIndex)
 		val partID = ""+pIndex
 		rows.toList.zipWithIndex.map{ case (r,index) => {
 			val rID = (partID+index).toInt
 			val (kDist, knns) = getKNN(index, distances(index), k, partID)
 			val (ids, dists) = knns.unzip
-			Row.fromSeq(rID +: (r.toSeq ++ Seq(kDist, ids, dists)))
-		}}.toIterator
+			Row.fromSeq(rID +: (Seq(kDist, ids.toArray, dists.toArray) ++ r.toSeq))
+		}}
+		//schema: r => rID | kDist | knnIDs | knnDists | r
+	}
+
+	private def getReachabilityDistances(rows: List[Row]):List[Row] = {
+		//println("Computing reachability distances...")
+		rows.map(r => {
+			val knnIDs = r.getAs[Array[Int]](2)
+			val knnDists = r.getAs[Array[Double]](3)
+			val (newIDs, reachDists) = knnIDs.zip(knnDists).flatMap{ case (id, dist) => 
+				getReachDist(rows, id, dist).map(d => (id, d))}.unzip
+			val seq = r.toSeq
+			Row.fromSeq(Seq(seq.head, newIDs, reachDists) ++ seq.drop(4))
+		})
+		//schema: rID | kDist | knnIDs | knnDists | r => rID | knnIDs | knnReachDists | r
+	}
+
+	private def getLRDs(rows: List[Row], k: Int):List[Row] = {
+		//println("Computing local reachability densities...")
+		rows.map(r => {
+			val reachDists = r.getAs[Array[Double]](2)
+			val lrd = reachDists.sum / k.toDouble
+			val seq = r.toSeq
+			Row.fromSeq(seq.take(2) ++ (lrd +: seq.drop(3)))
+		})
+		//schema: rID | knnIDs | knnReachDists | r => rID | knnIDs | LRD | r
+	}
+
+	private def getLOFs(rows: List[Row], k: Int):List[Row] = {
+		//println("Computing local outlier factors...")
+		rows.map(r => {
+			val knnIDs = r.getAs[Array[Int]](1)
+			val knnLRDs = knnIDs.flatMap(id =>
+				rows.find(r => r.getInt(0)==id).map(_.getDouble(2)))
+			val lof = knnLRDs.sum / k.toDouble
+			val seq = r.toSeq
+			Row.fromSeq(seq.drop(3) :+ lof)
+
+		})
+		//schema: rID | knnIDs | LRD | r => r, LOF
+	}
+
+	private def getReachDist(rows: List[Row], rowID: Int, dist: Double):Option[Double] = {
+		getRowKDist(rows, rowID).map(kd => math.max(kd, dist))
+	}
+	private def getRowKDist(rows: List[Row], rowID: Int):Option[Double] = {
+		rows.find(r => r.getInt(0)==rowID).map(_.getDouble(1))
+	}
+
+	private def computeDistanceMatrix(rows: Array[Row], featuresIndex: Int):Array[Array[Double]] = {
+		val distances = Array.ofDim[Double](rows.length,rows.length)
+		for(i <- 0 to rows.length - 2 ){
+			for(j <- i+1 to rows.length - 1 ){
+				val d = distance(rows(i), rows(j), featuresIndex)
+				distances(i)(j) = d
+				distances(j)(i) = d
+			}
+		}
+		distances
 	}
 
 	private def getKNN(sourceIndex: Int, distancesToOthers: Array[Double], k: Int,
@@ -98,63 +138,6 @@ class LOFtest(spark: SparkSession) extends Serializable{
 		(kDist, maxHeap.toList)
 	}
 
-	private def computeDistanceMatrix(rows: Array[Row], featuresIndex: Int):Array[Array[Double]] = {
-		val distances = Array.ofDim[Double](rows.length,rows.length)
-		for(i <- 0 to rows.length - 2 ){
-			for(j <- i+1 to rows.length - 1 ){
-				val d = distance(rows(i), rows(j), featuresIndex)
-				distances(i)(j) = d
-				distances(j)(i) = d
-			}
-		}
-		distances
-	}
-
-	private def getReachabilityDistances(withKDistances: DataFrame):DataFrame = {
-		withKDistances.rdd.mapPartitionsWithIndex{ case (pIndex, iter) => {
-			val rows = iter.toList
-			rows.map(r => {
-				val knnIDs = r.getAs[Array[Int]](2)
-				val knnDists = r.getAs[Array[Double]](3)
-				val (newIDs, reachDists) = knnIDs.zip(knnDists).flatMap{ case (id, dist) => 
-					getReachDist(rows, id, dist).map(d => (id, d))}.unzip
-				val seq = r.toSeq
-				Row.fromSeq(Seq(seq.head, newIDs, reachDists) ++ seq.drop(4))
-			}).toIterator
-		}}
-		???
-		//updates distance with reachability distance for each knn, schema doesnt change
-		//for each nid in ((n1id, d(r,n1)),(n2id, d(r,n2)),(n3id, d(r,n3)),...),
-		//lookup row nid, n, ndist, ...
-		//and have then rid, r, kdist, ((n1id, d(r,n1), n1dist),(n2id, d(r,n2), n2dist),(n3id, d(r,n3), n3dist),...)
-		//apply max(d(r,n),ndist)
-		//rid, r, kdist, ((n1id, n1reach),(n2id, n2reach),(n3id, n3reach),...)
-	}
-
-	private def getRowKDist(rows: List[Row], rowID: Int):Option[Double] = {
-		rows.find(r => r.getInt(0)==rowID).map(_.getDouble(1))
-	}
-	private def getReachDist(rows: List[Row], rowID: Int, dist: Double):Option[Double] = {
-		getRowKDist(rows, rowID).map(kd => math.max(kd, dist))
-	}
-
-	private def getLRDs(withReachabilities: DataFrame):DataFrame = {
-		???
-		//extend the schema with a Double for the local reachability density, computed
-		//from the reachabilities.
-		//rid, r, kdist, ((n1id, n1reach),(n2id, n2reach),(n3id, n3reach),...)
-		//lrd = sum(n1reach, n2reach, ...)/k
-		//=> rid, r, lrd, (n1id, n2id, n3id,...)
-	}
-
-	private def getLOFs(withLRDs: DataFrame):DataFrame = {
-		???
-		//for each n in (n1id, n2id, n3id,...), lookup lrd of n
-		//=> rid, r, lrd, (n1lrd, n2lrd, n3lrd,...)
-		//lof = (sum(n1lrd, n2lrd, n3lrd, ...)/lrd)/k
-		//=> rid, r, lof
-	}
-
 	private def distance(r1: Row, r2: Row, featuresIndex: Int):Double = {
 		val v1 = r1.getAs[Vector](featuresIndex)
 		val v2 = r2.getAs[Vector](featuresIndex)
@@ -165,17 +148,15 @@ class LOFtest(spark: SparkSession) extends Serializable{
 		val v = r.getAs[Vector](featuresIndex).toArray.toList
 		var total = 0.0
 		as.foreach(a => total+= a.zip(v).foldLeft(0.0){case (sum,(ai, vi)) => sum + ai*vi})
-		//val dotProduct = a.zip(v).foldLeft(0.0){case (sum,(ai, vi)) => sum + ai*vi}
-		val nbDigits = math.pow(10,7).toInt
+		val nbDigits = math.pow(10,8).toInt
 		val hash = math.floor(total*nbDigits)/nbDigits
 		Row.fromSeq(r.toSeq :+ hash)
 	}
 
-	private def getHashes(df: DataFrame, featuresIndex: Int):DataFrame = {
+	private def getHashes(df: DataFrame, featuresIndexB: Broadcast[Int]):DataFrame = {
 		println("Computing the hashes...")
 		val newSchema = df.schema.add(StructField("hash", DoubleType, true))
 		val encoder = RowEncoder(newSchema)
-		val featuresIndexB = spark.sparkContext.broadcast(featuresIndex)
 		val nbFeatures = df.columns.filter(c => c!="srcentity" && c!="dstentity"
 		&& c!="timeinterval" && c!="features").size
 

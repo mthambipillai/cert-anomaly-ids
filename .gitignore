@@ -1,5 +1,6 @@
 *.parquet
-project/*
+project/project/*
+project/target/*
 target/*
 *.keytab
 metastore_db/*

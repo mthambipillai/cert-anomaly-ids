@@ -41,12 +41,14 @@ object Detector{
 				}
 			}
 			case "kmeans" => {
-				val km = new KMeansDetector(spark, features, conf.kMeans.trainRatio, conf.kMeans.minNbK, 
-				conf.kMeans.maxNbK, conf.kMeans.elbowRatio, conf.kMeans.nbK, conf.kMeans.lowBound,
-				conf.kMeans.upBound)
-				km.right
+				new KMeansDetector(spark, features, conf.kMeans.trainRatio, conf.kMeans.minNbK, 
+					conf.kMeans.maxNbK, conf.kMeans.elbowRatio, conf.kMeans.nbK, conf.kMeans.lowBound,
+					conf.kMeans.upBound).right
 			}
-			case "lof" => new LOFDetector(spark, features, 5, 10000000.0).right
+			case "lof" => {
+				new LOFDetector(spark, features, conf.lof.k, conf.lof.hashNbDigits,
+					conf.lof.maxScore).right
+			}
 			case _ => ("Detector '"+name+"' does not exist.").left
 		}
 	}

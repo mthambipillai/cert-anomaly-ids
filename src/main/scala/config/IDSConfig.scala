@@ -37,7 +37,9 @@ case class IDSConfig(
 	//IsolationForest parameters
 	val isolationForest: IsolationForestConfig,
 	//KMeans parameters
-	val kMeans: KMeansConfig
+	val kMeans: KMeansConfig,
+	//Local Outlier Factor parameters
+	val lof: LOFConfig
 )
 
 object IDSConfig{
@@ -145,10 +147,11 @@ object IDSConfig{
 			intrusionsDir = config.getString("intrusionsdir")
 			isolationForest = IsolationForestConfig.load(config)
 			kMeans = KMeansConfig.load(config)
+			lof = LOFConfig.load(config)
 
 			fromFile = IDSConfig("", logLevel, filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
 				ensembleMode, featuresFile, featuresStatsFile, detectors, threshold, topAnomalies, anomaliesFile,
-				rules, inspectionResults, recall, intrusions, intrusionsDir, isolationForest, kMeans)
+				rules, inspectionResults, recall, intrusions, intrusionsDir, isolationForest, kMeans, lof)
 			res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
 			checkFeatures <- if(res.featuresschema.isEmpty) "Could not parse features.".left else res.right
 			checkRules <- if(checkFeatures.rules.isEmpty) "Could not parse rules.".left else checkFeatures.right

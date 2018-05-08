@@ -1,335 +1,204 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package org.apache.spark.ml.outlier
-
-
-import org.apache.spark.ml.Transformer
-import org.apache.spark.ml.linalg.{Vector, VectorUDT, Vectors}
-import org.apache.spark.ml.param.shared.{HasFeaturesCol, HasOutputCol}
-import org.apache.spark.ml.param.{IntParam, Param, ParamMap, Params}
-import org.apache.spark.ml.util.{Identifiable, SchemaUtils}
+package lof
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.Row
+import org.apache.spark.ml.linalg.{Vector, Vectors}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Dataset, Row}
+import scala.collection.mutable.PriorityQueue
+import org.apache.spark.broadcast.Broadcast
 
-import scala.collection.mutable.ArrayBuffer
+class LOF(spark: SparkSession, k: Int, hashNbDigits: Int) extends Serializable{
 
-private[ml] trait LOFParams extends Params
-    with HasFeaturesCol with HasOutputCol {
+	object KNNOrder extends Ordering[(Int,Double)] {
+		def compare(x:(Int,Double), y:(Int,Double)) = x._2 compare y._2
+	}
 
-  /**
-    * The minimum number of points.
-    *
-    * @group expertGetParam
-    */
-  final val minPts = new IntParam(
-    this, "minPts", "a minimum number of points"
-  )
-  setDefault(minPts -> 5)
+	def transform(data: DataFrame):DataFrame = {
+		val featuresIndex = data.columns.indexOf("features")
+		val featuresIndexB = spark.sparkContext.broadcast(featuresIndex)
+		val kB = spark.sparkContext.broadcast(k)
 
-  final val distType = new Param[String](
-    this, "distType", "the type of distance"
-  )
-  setDefault(distType -> LOF.euclidean)
-}
+		val lsh = getHashes(data, featuresIndexB).repartition(col("hash")).drop("hash")
+		println("nb parts : "+lsh.rdd.partitions.size)
+		val rdd = lsh.rdd.mapPartitionsWithIndex{ case (pIndex, iter) => {
+			val featuresIndex = featuresIndexB.value
+			val k = kB.value
+			val rows = iter.toArray
+			val withKDists = getKDistances(pIndex, rows, featuresIndex, k)
+			val withReachDists = getReachabilityDistances(withKDists)
+			val withLRDs = getLRDs(withReachDists, k)
+			getLOFs(withLRDs, k).toIterator
+		}}
+		val lofField = StructField("lof", DoubleType, true)
+		val newSchema = StructType(data.schema ++ Seq(lofField))
+		val res = spark.sqlContext.createDataFrame(rdd, newSchema)
+		res
+	}
 
-class LOF(
-    override val uid: String) extends Transformer with LOFParams {
+	private def getKDistances(pIndex: Int, rows: Array[Row], featuresIndex: Int, k: Int):List[Row] = {
+		//println("Computing KNNs and their distances...")
+		val distances = computeDistanceMatrix(rows, featuresIndex)
+		val partID = ""+pIndex
+		rows.toList.zipWithIndex.map{ case (r,index) => {
+			val rID = (partID+index).toInt
+			val (kDist, knns) = getKNN(index, distances(index), k, partID)
+			val (ids, dists) = knns.unzip
+			Row.fromSeq(rID +: (Seq(kDist, ids.toArray, dists.toArray) ++ r.toSeq))
+		}}
+		//schema: r => rID | kDist | knnIDs | knnDists | r
+	}
 
-  def this() = this(Identifiable.randomUID("lof"))
+	private def getReachabilityDistances(rows: List[Row]):List[Row] = {
+		//println("Computing reachability distances...")
+		rows.map(r => {
+			val knnIDs = r.getAs[Array[Int]](2)
+			val knnDists = r.getAs[Array[Double]](3)
+			val (newIDs, reachDists) = knnIDs.zip(knnDists).flatMap{ case (id, dist) => 
+				getReachDist(rows, id, dist).map(d => (id, d))}.unzip
+			val seq = r.toSeq
+			Row.fromSeq(Seq(seq.head, newIDs, reachDists) ++ seq.drop(4))
+		})
+		//schema: rID | kDist | knnIDs | knnDists | r => rID | knnIDs | knnReachDists | r
+	}
 
-  /**
-    * Sets the value of param [[minPts]].
-    * Default is 5.
-    *
-    * @group expertSetParam
-    */
-  def setMinPts(value: Int): this.type = {
-    require(value > 0, "minPts must be a positive integer.")
-    set(minPts, value)
-  }
+	private def getLRDs(rows: List[Row], k: Int):List[Row] = {
+		//println("Computing local reachability densities...")
+		rows.map(r => {
+			val reachDists = r.getAs[Array[Double]](2)
+			val lrd = reachDists.sum / k.toDouble
+			val seq = r.toSeq
+			Row.fromSeq(seq.take(2) ++ (lrd +: seq.drop(3)))
+		})
+		//schema: rID | knnIDs | knnReachDists | r => rID | knnIDs | LRD | r
+	}
 
-  override def transform(dataset: Dataset[_]): DataFrame = {
-    val input = dataset.select(col($(featuresCol))).rdd.map {
-      case Row(vec: Vector) => vec
-    }
-    val session = dataset.sparkSession
-    val sc = session.sparkContext
-    val indexedPointsRDD = input.zipWithIndex().map(_.swap).persist()
-    val numPartitionsOfIndexedPointsRDD = indexedPointsRDD.getNumPartitions
+	private def getLOFs(rows: List[Row], k: Int):List[Row] = {
+		//println("Computing local outlier factors...")
+		rows.map(r => {
+			val knnIDs = r.getAs[Array[Int]](1)
+			val knnLRDs = knnIDs.flatMap(id =>
+				rows.find(r => r.getInt(0)==id).map(_.getDouble(2)))
+			val lof = knnLRDs.sum / k.toDouble
+			val seq = r.toSeq
+			Row.fromSeq(seq.drop(3) :+ lof)
 
-    // compute k-distance neighborhood of each point
-    val neighborhoodRDD = Range(0, numPartitionsOfIndexedPointsRDD).map { outId: Int =>
-      val outPart = indexedPointsRDD.mapPartitionsWithIndex { (inId, iter) =>
-        if (inId == outId) {
-          iter
-        } else {
-          Iterator.empty
-        }
-      }.collect()
-      val bcOutPart = sc.broadcast(outPart)
-      indexedPointsRDD.mapPartitions { inPart =>
-        val part = inPart.toArray
-        val buf = new ArrayBuffer[(Long, Array[(Long, Double)])]()
-        bcOutPart.value.foreach { case (idx: Long, vec: Vector) =>
-          val neighborhood = computeKDistanceNeighborhood(part, vec, $(minPts), $(distType))
-          buf.append((idx, neighborhood))
-        }
-        buf.iterator
-      }.reduceByKey(combineNeighborhood)
-    }.reduce(_.union(_))
+		})
+		//schema: rID | knnIDs | LRD | r => r, LOF
+	}
 
-    val swappedRDD = neighborhoodRDD.flatMap {
-        case (outIdx: Long, neighborhood: Array[(Long, Double)]) =>
-      neighborhood.map { case (inIdx: Long, dist: Double) =>
-        (inIdx, (outIdx, dist))
-      } :+ (outIdx, (outIdx, 0d))
-    }.groupByKey().persist()
+	private def getReachDist(rows: List[Row], rowID: Int, dist: Double):Option[Double] = {
+		getRowKDist(rows, rowID).map(kd => math.max(kd, dist))
+	}
+	private def getRowKDist(rows: List[Row], rowID: Int):Option[Double] = {
+		rows.find(r => r.getInt(0)==rowID).map(_.getDouble(1))
+	}
 
-    val localOutlierFactorRDD = swappedRDD.cogroup(neighborhoodRDD)
-    .flatMap { case (outIdx: Long,
-    (k: Iterable[Iterable[(Long, Double)]], v: Iterable[Array[(Long, Double)]])) =>
-      require(k.size == 1 && v.size == 1)
-      val kDistance = v.head.last._2
-      k.head.filter(_._1 != outIdx).map { case (inIdx: Long, dist: Double) =>
-        (inIdx, (outIdx, Math.max(dist, kDistance)))
-      }
-    }.groupByKey().map { case (idx: Long, iter: Iterable[(Long, Double)]) =>
-      val num = iter.size
-      val sum = iter.map(_._2).sum
-      (idx, num / sum)
-    }.cogroup(swappedRDD).flatMap {
-      case (outIdx: Long, (k: Iterable[Double], v: Iterable[Iterable[(Long, Double)]])) =>
-        require(k.size == 1 && v.size == 1)
-        val lrd = k.head
-        v.head.map { case (inIdx: Long, dist: Double) =>
-          (inIdx, (outIdx, lrd))
-        }
-    }.groupByKey().map { case (idx: Long, iter: Iterable[(Long, Double)]) =>
-      require(iter.exists(_._1 == idx))
-      val lrd = iter.find(_._1 == idx).get._2
-      val sum = iter.filter(_._1 != idx).map(_._2).sum
-      (idx, sum / lrd / (iter.size - 1))
-    }
+	private def computeDistanceMatrix(rows: Array[Row], featuresIndex: Int):Array[Array[Double]] = {
+		val distances = Array.ofDim[Double](rows.length,rows.length)
+		for(i <- 0 to rows.length - 2 ){
+			for(j <- i+1 to rows.length - 1 ){
+				val d = distance(rows(i), rows(j), featuresIndex)
+				distances(i)(j) = d
+				distances(j)(i) = d
+			}
+		}
+		distances
+	}
 
-    val finalRDD = localOutlierFactorRDD.join(indexedPointsRDD)
-      .map(r => Row(r._1, r._2._1, r._2._2))
-    val schema = transformSchema(dataset.schema)
-    session.createDataFrame(finalRDD, schema)
-  }
+	private def getKNN(sourceIndex: Int, distancesToOthers: Array[Double], k: Int,
+		partID: String): (Double,List[(Int,Double)]) = {
+		var count = 0
+		var kDist = 0.0
+		val maxHeap = PriorityQueue.empty(KNNOrder)
 
-  override def copy(extra: ParamMap): Transformer = defaultCopy(extra)
+		def addToHeap(i: Int, d: Double):Unit = {
+			maxHeap.enqueue(((partID+i).toInt,d))
+			if(d > kDist){
+				kDist = d
+			}
+		}
 
-  override def transformSchema(schema: StructType): StructType = {
-    SchemaUtils.checkColumnType(schema, ${featuresCol}, new VectorUDT())
+		for(i <- 0 to distancesToOthers.length - 1){
+			if(i!=sourceIndex){
+				val d = distancesToOthers(i)
+				if(count < k){
+					addToHeap(i, d)
+				}else{
+					val maxDist = maxHeap.head._2
+					if(d < maxDist){
+						maxHeap.dequeue()
+						addToHeap(i, d)
+					}
+				}
+				count = count + 1
+			}
+		}
+		(kDist, maxHeap.toList)
+	}
 
-    StructType(Array(
-      StructField(LOF.index,
-        DataTypes.LongType,
-        false),
-      StructField(LOF.lof,
-        DataTypes.DoubleType,
-        false),
-      StructField(LOF.vector,
-        new VectorUDT(),
-        false)
-      )
-    )
-  }
+	private def distance(r1: Row, r2: Row, featuresIndex: Int):Double = {
+		val v1 = r1.getAs[Vector](featuresIndex)
+		val v2 = r2.getAs[Vector](featuresIndex)
+		Vectors.sqdist(v1, v2)
+	}
 
-  // TODO: The time complexity of this function is O(n * k). It should be optimized to O(n * log(k)) if needed.
-  /**
-    * Compute the k-distance neighborhood.
-    *
-    * @param data
-    * @param target
-    * @param k
-    * @param distType
-    * @return
-    */
-  def computeKDistanceNeighborhood(
-      data: Array[(Long, Vector)],
-      target: Vector,
-      k: Int,
-      distType: String): Array[(Long, Double)] = {
-    /**
-      * Move elements in data from the start position to right by one unit.
-      *
-      * @param data
-      * @param start
-      * @return
-      */
-    def moveRight(data: ArrayBuffer[(Long, Double)], start: Int): ArrayBuffer[(Long, Double)] = {
-      require(start >= 0 && start < data.length)
-      if (data.nonEmpty) {
-        data.append(data.last)
-        var i = data.length - 1
-        while (i > start) {
-          data(i) = data(i - 1)
-          i -= 1
-        }
-      }
-      data
-    }
+	private def localSensitiveHash(r: Row, as: List[List[Double]], featuresIndex: Int):Row = {
+		val v = r.getAs[Vector](featuresIndex).toArray.toList
+		var total = 0.0
+		as.foreach(a => total+= a.zip(v).foldLeft(0.0){case (sum,(ai, vi)) => sum + ai*vi})
+		val nbDigitsPow = math.pow(10,hashNbDigits).toInt
+		val hash = math.floor(total*nbDigitsPow)/nbDigitsPow
+		Row.fromSeq(r.toSeq :+ hash)
+	}
 
-    var idxAndDist = new ArrayBuffer[(Long, Double)]()
-    var count = 0 // the size of distinct instances
-    data.foreach { case (idx: Long, vec: Vector) =>
-      val targetDist = distType match {
-        case LOF.euclidean => Vectors.sqdist(target, vec)
-        case _ => throw new IllegalArgumentException(s"Distance type $distType is not supported now.")
-      }
-      // targetDist equals zero when computing distance between vec and itself
-      if (targetDist > 0d) {
-        var i = 0
-        var inserted = false
-        while (i < idxAndDist.length && !inserted) {
-          val dist = idxAndDist(i)._2
-          if (targetDist <= dist) {
-            if (count < k) {
-              idxAndDist = moveRight(idxAndDist, i)
-              idxAndDist(i) = (idx, targetDist)
-              if (targetDist < dist) {
-                count += 1
-              }
-            } else if (count == k) {
-              if (targetDist == dist) {
-                idxAndDist = moveRight(idxAndDist, i)
-                idxAndDist(i) = (idx, targetDist)
-              } else {
-                var sameRight = 0
-                var j = idxAndDist.length - 1
-                while (j > 0 && idxAndDist(j)._2 == idxAndDist(j - 1)._2) {
-                  sameRight += 1
-                  j -= 1
-                }
-                if (dist == idxAndDist.last._2) {
-                  idxAndDist = idxAndDist.dropRight(sameRight)
-                } else {
-                  idxAndDist = idxAndDist.dropRight(sameRight + 1)
-                  idxAndDist = moveRight(idxAndDist, i)
-                }
-                idxAndDist(i) = (idx, targetDist)
-              }
-            } else {
-              throw new RuntimeException(s"count($count) should not larger than k($k)")
-            }
-            inserted = true
-          }
-          i += 1
-        }
-        if (count < k && !inserted) {
-          idxAndDist.append((idx, targetDist))
-          count += 1
-        }
-      }
-    }
-    idxAndDist.toArray
-  }
+	private def getHashes(df: DataFrame, featuresIndexB: Broadcast[Int]):DataFrame = {
+		println("Computing the hashes...")
+		val newSchema = df.schema.add(StructField("hash", DoubleType, true))
+		val encoder = RowEncoder(newSchema)
+		val nbFeatures = df.columns.filter(c => c!="srcentity" && c!="dstentity"
+		&& c!="timeinterval" && c!="features").size
 
-  /**
-    * Combine neighborhood between two partitions. The time complexity of this function is O(m + n).
-    *
-    * @param first
-    * @param second
-    * @return
-    */
-  def combineNeighborhood(
-      first: Array[(Long, Double)],
-      second: Array[(Long, Double)]): Array[(Long, Double)] = {
+		val primes = List(2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97,101,103,107,
+			109,113,127,131,137,139,149,151,157,163,167,173,179,181,191,193,197,199,211,223,227,229)
+		val a = primes.take(nbFeatures).map(_.toDouble)
+		val r = scala.util.Random
+		val as = (1 to 10).map(i => r.shuffle(a)).toList
+		val asB = spark.sparkContext.broadcast(as)
+		df.mapPartitions(iter => {
+			val featuresIndex = featuresIndexB.value
+			val as = asB.value
+			iter.map(r => localSensitiveHash(r, as, featuresIndex))
+		})(encoder)
+	}
 
-    var pos1 = 0
-    var pos2 = 0
-    var count = 0 // the size of distinct instances
-    val combined = new ArrayBuffer[(Long, Double)]()
+	private def meanDistToOthers(rows: Array[Row], index: Int, featuresIndex: Int):Double = {
+		if(rows.length==1) return 0.0
+		(0 to rows.length - 1).foldLeft(0.0){case (prevSum, i) => {
+			if(i!=index){
+				prevSum + distance(rows(index), rows(i), featuresIndex)
+			}else{
+				prevSum
+			}
+		}}
+	}
 
-    while (pos1 < first.length && pos2 < second.length && count < $(minPts)) {
-        if (first(pos1)._2 == second(pos2)._2) {
-          combined.append(first(pos1))
-          pos1 += 1
-          if (combined.length == 1) {
-            count += 1
-          } else {
-            if (combined(combined.length - 1) != combined(combined.length - 2)) {
-              count += 1
-            }
-          }
-          combined.append(second(pos2))
-          pos2 += 1
-        } else {
-          if (first(pos1)._2 < second(pos2)._2) {
-            combined.append(first(pos1))
-            pos1 += 1
-          } else {
-            combined.append(second(pos2))
-            pos2 += 1
-          }
-          if (combined.length == 1) {
-            count += 1
-          } else {
-            if (combined(combined.length - 1) != combined(combined.length - 2)) {
-              count += 1
-            }
-          }
-        }
-    }
+	private def meanDist(rows: Array[Row], featuresIndex: Int):Double = {
+		if(rows.length==0) return 0.0
+		val meanDists = (0 to rows.length - 1).map(i => meanDistToOthers(rows, i, featuresIndex))
+		meanDists.sum / (rows.length*rows.length).toDouble
+	}
 
-    while (pos1 < first.length && count < $(minPts)) {
-      combined.append(first(pos1))
-      pos1 += 1
-      if (combined.length == 1) {
-        count += 1
-      } else {
-        if (combined(combined.length - 1) != combined(combined.length - 2)) {
-          count += 1
-        }
-      }
-    }
-
-    while (pos2 < second.length && count < $(minPts)) {
-      combined.append(second(pos2))
-      pos2 += 1
-      if (combined.length == 1) {
-        count += 1
-      } else {
-        if (combined(combined.length - 1) != combined(combined.length - 2)) {
-          count += 1
-        }
-      }
-    }
-
-    combined.toArray
-  }
-}
-
-object LOF {
-  /** String name for "euclidean" (euclidean distance). */
-  private[ml] val euclidean = "euclidean"
-
-  /** Set of types of distances that Local Outlier Factor supports. */
-  private[ml] val supportedDistTypes = Array(euclidean)
-
-  /** String name for column "index" */
-  private[ml] val index = "index"
-
-  /** String name for column "lof" */
-  private[ml] val lof = "lof"
-
-  /** String name for column "vector" */
-  private[ml] val vector = "vector"
+	private def getMeanDist(df: DataFrame, featuresIndex: Int, accName: String):Double = {
+		val counter = spark.sparkContext.doubleAccumulator(accName)
+		val featuresIndexB = spark.sparkContext.broadcast(featuresIndex)
+		df.foreachPartition(iter => {
+			val featuresIndex = featuresIndexB.value
+			var arr = iter.toArray
+			val res = meanDist(arr, featuresIndex)
+			counter.add(res)
+		})
+		counter.value
+	}
 }

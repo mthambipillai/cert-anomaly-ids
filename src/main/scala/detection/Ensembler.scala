@@ -12,7 +12,8 @@ the different resulting scores into a single score.
 */
 class Ensembler(){
 
-	private val meanUDF = udf((score1: Double, score2: Double) => (score1+score2)/2.0)
+	private val mean2UDF = udf((score1: Double, score2: Double) => (score1+score2))
+	private def meanFinalUDF(n: Double) = udf((score: Double) => score/n)
 	private val maxUDF = udf((score1: Double, score2: Double) => scala.math.max(score1, score2))
 
 	/*
@@ -22,9 +23,9 @@ class Ensembler(){
 	def detectAndCombine(eType:String, ensembleMode: String, threshold: Double,
 		detectors: List[Detector]):String\/DataFrame = {
 		for(
-			eUDF <- ensembleMode match{
-						case "mean" => meanUDF.right
-						case "max" => maxUDF.right
+			(eUDF, finalUDFOpt) <- ensembleMode match{
+						case "mean" => (mean2UDF, Some(meanFinalUDF(detectors.size))).right
+						case "max" => (maxUDF, None).right
 						case _ => ("Unknown ensembleMode "+ensembleMode).left
 					}
 		)yield{
@@ -32,7 +33,7 @@ class Ensembler(){
 			if(detectors.size > 1){
 				println("\nCombining different detectors results with mode '"+ensembleMode+"'...")
 			}
-			combineAll(eType, eUDF, threshold, detected)
+			combineAll(eType, eUDF, threshold, detected, finalUDFOpt)
 		}
 	}
 
@@ -57,10 +58,18 @@ class Ensembler(){
 		detectors.map(_.detect(threshold))
 	}
 
-	def combineAll(eType: String, eUDF: UserDefinedFunction, threshold: Double, anomalies: Seq[DataFrame]):DataFrame = {
+	def combineAll(eType: String, eUDF: UserDefinedFunction, threshold: Double,
+		anomalies: Seq[DataFrame], finalUDFOpt: Option[UserDefinedFunction]):DataFrame = {
 		val combined = anomalies.tail.foldLeft(anomalies.head){case (anoms1, anoms2) => 
-			combine2(eType, eUDF, threshold, anoms1, anoms2)}
-		combined.drop("scaled"+eType+"Index", "scaledtimeinterval")
+			combine2(eType, eUDF, threshold, anoms1, anoms2)}.drop("scaled"+eType+"Index", "scaledtimeinterval")
+		finalUDFOpt match{
+			case Some(finalUDF) => {
+				val scoreColName = combined.columns.last
+				combined.withColumn(scoreColName+"2", finalUDF(col(scoreColName)))
+				.drop(scoreColName).withColumnRenamed(scoreColName+"2", scoreColName)
+			}
+			case None => combined
+		}
 	}
 
 	/*

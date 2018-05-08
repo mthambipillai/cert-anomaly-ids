@@ -9,7 +9,7 @@ import org.apache.spark.sql.functions._
 import scala.collection.mutable.PriorityQueue
 import org.apache.spark.broadcast.Broadcast
 
-class LOF(spark: SparkSession, k: Int, hashNbDigits: Int) extends Serializable{
+class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) extends Serializable{
 
 	object KNNOrder extends Ordering[(Int,Double)] {
 		def compare(x:(Int,Double), y:(Int,Double)) = x._2 compare y._2
@@ -21,7 +21,7 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int) extends Serializable{
 		val kB = spark.sparkContext.broadcast(k)
 
 		val lsh = getHashes(data, featuresIndexB).repartition(col("hash")).drop("hash")
-		println("nb parts : "+lsh.rdd.partitions.size)
+		println("Computing LOF for each hash partition...")
 		val rdd = lsh.rdd.mapPartitionsWithIndex{ case (pIndex, iter) => {
 			val featuresIndex = featuresIndexB.value
 			val k = kB.value
@@ -164,7 +164,7 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int) extends Serializable{
 			109,113,127,131,137,139,149,151,157,163,167,173,179,181,191,193,197,199,211,223,227,229)
 		val a = primes.take(nbFeatures).map(_.toDouble)
 		val r = scala.util.Random
-		val as = (1 to 10).map(i => r.shuffle(a)).toList
+		val as = (1 to hashNbVects).map(i => r.shuffle(a)).toList
 		val asB = spark.sparkContext.broadcast(as)
 		df.mapPartitions(iter => {
 			val featuresIndex = featuresIndexB.value

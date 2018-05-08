@@ -47,7 +47,7 @@ object Detector{
 			}
 			case "lof" => {
 				new LOFDetector(spark, features, conf.lof.k, conf.lof.hashNbDigits,
-					conf.lof.maxScore).right
+					conf.lof.hashNbVects, conf.lof.maxScore).right
 			}
 			case _ => ("Detector '"+name+"' does not exist.").left
 		}

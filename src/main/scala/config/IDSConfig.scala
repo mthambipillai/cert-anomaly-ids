@@ -121,33 +121,30 @@ object IDSConfig{
 			configTemp <- Try(ConfigFactory.parseFile(new File(confFile))).toDisjunction.leftMap(e =>
 				"Could not parse '"+confFile+"' because of "+e.getMessage)
 			config = configTemp.resolve()
-			filePath = config.getString("logspath")
-			logLevel = config.getString("loglevel")
-			featuresschema <- FeaturesParser.parse(config.getString("featuresschema"))
-			extractor = config.getString("extractor")
-			interval <- Try(Duration(config.getString("aggregationtime"))).toDisjunction.leftMap(e =>
-				"Could not parse duration because of "+e.getMessage)
-			trafficMode = config.getString("trafficmode")
-			scaleMode = config.getString("scalemode")
-			ensembleMode = config.getString("ensemblemode")
-			featuresFile = config.getString("featuresfile")
-			featuresStatsFile = config.getString("featuresstatsfile")
-			detectors = config.getString("detectors")
-			threshold <- Try(config.getDouble("threshold")).toDisjunction.leftMap(e =>
-				"Could not parse double for 'threshold'")
-			trafficMode = config.getString("trafficmode")
-			topAnomalies <- Try(config.getInt("nbtopanomalies")).toDisjunction.leftMap(e =>
-				"Could not parse int for 'topAnomalies'")
-			anomaliesFile = config.getString("anomaliesfile")
-			rules <- RulesParser.parse(config.getString("rules"))
-			inspectionResults = config.getString("inspectionfiles")
-			recall <- Try(config.getBoolean("recall")).toDisjunction.leftMap(e =>
-				"Could not parse boolean for 'recall'")
-			intrusions <- IntrusionsParser.parse(config.getString("intrusions"))
-			intrusionsDir = config.getString("intrusionsdir")
-			isolationForest = IsolationForestConfig.load(config)
-			kMeans = KMeansConfig.load(config)
-			lof = LOFConfig.load(config)
+			filePath <- tryGet(config.getString)("logspath")
+			logLevel <- tryGet(config.getString)("loglevel")
+			featuresschema <- tryGet(config.getString)("featuresschema").flatMap(f => FeaturesParser.parse(f))
+			extractor <- tryGet(config.getString)("extractor")
+			interval <- tryGet(config.getString)("aggregationtime").flatMap(i =>
+				Try(Duration(i)).toDisjunction.leftMap(e => "Could not parse duration because of "+e.getMessage))
+			trafficMode <- tryGet(config.getString)("trafficmode")
+			scaleMode <- tryGet(config.getString)("scalemode")
+			ensembleMode <- tryGet(config.getString)("ensemblemode")
+			featuresFile <- tryGet(config.getString)("featuresfile")
+			featuresStatsFile <- tryGet(config.getString)("featuresstatsfile")
+			detectors <- tryGet(config.getString)("detectors")
+			threshold <- tryGet(config.getDouble)("threshold")
+			trafficMode <- tryGet(config.getString)("trafficmode")
+			topAnomalies <- tryGet(config.getInt)("nbtopanomalies")
+			anomaliesFile <- tryGet(config.getString)("anomaliesfile")
+			rules <- tryGet(config.getString)("rules").flatMap(r => RulesParser.parse(r))
+			inspectionResults <- tryGet(config.getString)("inspectionfiles")
+			recall <- tryGet(config.getBoolean)("recall")
+			intrusions <- tryGet(config.getString)("intrusions").flatMap(i => IntrusionsParser.parse(i)) 
+			intrusionsDir <- tryGet(config.getString)("intrusionsdir")
+			isolationForest <- IsolationForestConfig.load(config)
+			kMeans <- KMeansConfig.load(config)
+			lof <- LOFConfig.load(config)
 
 			fromFile = IDSConfig("", logLevel, filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
 				ensembleMode, featuresFile, featuresStatsFile, detectors, threshold, topAnomalies, anomaliesFile,
@@ -157,5 +154,9 @@ object IDSConfig{
 			checkRules <- if(checkFeatures.rules.isEmpty) "Could not parse rules.".left else checkFeatures.right
 			checkIntrusions <- if(checkRules.intrusions.isEmpty) "Could not parse intrusions.".left else checkRules.right
 		}yield checkIntrusions
+	}
+
+	def tryGet[T](get: String => T)(paramName: String):String\/T = {
+		Try(get(paramName)).toDisjunction.leftMap(e => e.getMessage)
 	}
 }

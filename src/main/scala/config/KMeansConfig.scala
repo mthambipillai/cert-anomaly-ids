@@ -1,5 +1,6 @@
 package config
 import com.typesafe.config.Config
+import scalaz._
 
 case class KMeansConfig(
 	val trainRatio: Double,
@@ -13,14 +14,15 @@ case class KMeansConfig(
 
 object KMeansConfig{
 
-	def load(conf: Config):KMeansConfig = {
-		val trainRatio = conf.getDouble("trainratio")
-		val minNbK = conf.getInt("minnbk")
-		val maxNbK = conf.getInt("maxnbk")
-		val elbowRatio = conf.getDouble("elbowratio")
-		val nbK = conf.getInt("nbk")
-		val lowBound = conf.getLong("lowbound")
-		val upBound = conf.getLong("upbound")
-		KMeansConfig(trainRatio, minNbK, maxNbK, elbowRatio, nbK, lowBound, upBound)
+	def load(conf: Config):String\/KMeansConfig = {
+		for{
+			trainRatio <- IDSConfig.tryGet(conf.getDouble)("trainratio")
+			minNbK <- IDSConfig.tryGet(conf.getInt)("minnbk")
+			maxNbK <- IDSConfig.tryGet(conf.getInt)("maxnbk")
+			elbowRatio <- IDSConfig.tryGet(conf.getDouble)("elbowratio")
+			nbK <- IDSConfig.tryGet(conf.getInt)("nbk")
+			lowBound <- IDSConfig.tryGet(conf.getLong)("lowbound")
+			upBound <- IDSConfig.tryGet(conf.getLong)("upbound")
+		}yield KMeansConfig(trainRatio, minNbK, maxNbK, elbowRatio, nbK, lowBound, upBound)
 	}
 }

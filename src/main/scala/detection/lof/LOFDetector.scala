@@ -6,7 +6,7 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.SparkSession
 
 class LOFDetector(spark: SparkSession, data: DataFrame, k: Int, hashNbDigits: Int,
-	knownMaxScore: Double) extends Detector{
+	hashNbVects: Int, knownMaxScore: Double) extends Detector{
 
 	private val assembled = {
 		println("\nStarting to build Local Outlier Factor model...\n")
@@ -15,7 +15,7 @@ class LOFDetector(spark: SparkSession, data: DataFrame, k: Int, hashNbDigits: In
 		assembler.transform(data)
 	}
 
-	private val lofModel = new LOF(spark, k, hashNbDigits)
+	private val lofModel = new LOF(spark, k, hashNbDigits, hashNbVects)
 
 	override def detect(threshold: Double):DataFrame = {
 		println("\nStarting to detect with Local Outlier Factor...\n")
@@ -38,6 +38,6 @@ class LOFDetector(spark: SparkSession, data: DataFrame, k: Int, hashNbDigits: In
 		val lofThreshold = threshold*maxScore
 
 		lofs.filter(col("lof").geq(lofThreshold))
-		.withColumn("score_lof", scoreUDF(maxScore)(col("lof"))).drop("lof")
+		.withColumn("lof_score", scoreUDF(maxScore)(col("lof"))).drop("lof")
 	}
 }

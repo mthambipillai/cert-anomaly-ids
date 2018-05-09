@@ -60,7 +60,7 @@ The following parameters can be placed after the `detect` command:
 
 - `-f, --featuresfile`: Defines the path and name of the file where to read the features from. The extension is `.parquet` and is added automatically to the path. So `featuresfile=myfeatures` will try to read from `myfeatures.parquet`. The same parameter is defined for features creation in `extract` but in `conf/application.conf` it is a single parameter.
 - `-s, --featuresstatsfile`: Defines the path and name of the file where to read the statistics of the features from. Some detectors use these informations such as the number of rows or the min and max of each columns to speed up the processing. The same parameter is defined for features creation in `extract` but in `conf/application.conf` it is a single parameter.
-- `-d, --detectors`: Defines the detectors to be used for anomaly detection in the following format : `"d1,d2,d3,..."` where `d1`, `d2` and `d3` are the names of the detectors. So far two detectors have been implemented: `iforest` (described in IsolationForest subsection) and `kmeans` (described in KMeans subsection). A third detector using Local Outlier Factor and named `lof` will be implemented soon.
+- `-d, --detectors`: Defines the detectors to be used for anomaly detection in the following format : `"d1,d2,d3,..."` where `d1`, `d2` and `d3` are the names of the detectors. So far 3 detectors have been implemented: `iforest` (described in IsolationForest subsection), `kmeans` (described in KMeans subsection) and `lof` (described in Local Outlier Factor subsection).
 - `-t, --threshold`: Defines the threshold score value between 0.0 and 1.0 above which aggregated rows are considered anomalies.
 - `-n, --nbtopanomalies`: Defines how many anomalies should be persisted, starting from the anomaly with the highest score and going down in the sorted scores of the detected anomalies.
 - `-a, --anomaliesfile`: Defines the path and name of the file where to write the anomalies to. The extension is `.csv` and is added automatically to the path. So `anomaliesfile=myanomalies` will create `myanomalies.csv`.
@@ -188,18 +188,21 @@ The following parameters can be tuned:
 
 Local Outlier Factor (LOF) is an outlier detection algorithm mostly used in network anomaly detection. It is based on the local density concept: The algorithm computes the k nearest neighbors for each point and their distances. This allows to construct density values for each point than can be compared to the densities of the neighbors, giving a local density value. The LOF value is smaller than 1 for points denser than their neighbors. Values significantly larger than 1 represent outliers. More details about LOF can be found [here](https://en.wikipedia.org/wiki/Local_outlier_factor).
 Since kNN computation is very expensive for large datasets, the implementation uses [locality-sensitive hashing](https://en.wikipedia.org/wiki/Locality-sensitive_hashing) (LSH) to try to repartition the dataset such that points close to each other are in the same partition. The rest of the algorithm can then be computed concurrently in each partition. The LSH function used works as follows : we create a set of vectors with prime components and of the same length of our rows. We sum the dot products of the row with each vector and truncate the last d digits.
+LOF assigns scores on an open scale from 0.0 but to be consistent with the other detectors they need to be mapped to scores between 0.0 and 1.0. So we define a threshold value that will be mapped to 1.0 meaning that scores higher than this threshold will also be mapped to 1.0. This threshold can either be manually set or computed as the maximum from all scores.
 
 The following parameters can be changed:
 
 - `k`: The number of nearest neighbors to consider.
 - `hashnbdigits`: The number of digits after the decimal dot to keep for each hash. A low number means a low number of different hashes so fewer and larger partitions which means slower computations but more likely to have the kNN inside the partition. A large number means a large number of different hashes so more and smalller partitions which means faster computation inside each partition but more likely to have the kNN accross different partitions.
-- `hashnbvects` = number of vectors to create for the dot products with each row.
+- `hashnbvects`: number of vectors to create for the dot products with each row.
+- `maxscore`: LOF score that will be mapped to 1.0. -1 if this score should be computed as the maximum score.
 
 ## Contributing
 
 You can contribute by adding new features functions, detectors, rules, etc to the ones already implemented.
 
 Here are a few possible extensions:
+
 - Create a new aggregate function for features: in `features/Feature.scala`, in the companion `object`, implement a new function of type `String => Column` where the `String` is the column name. You can use already predefined aggregation functions from `import org.apache.spark.sql.functions._` or you can build your own by extending the class `UserDefinedAggregateFunction`. Once you have this function, you can add a `case` in the `getAggFunction` method in `features/FeaturesParser.scala` using a name of your choice. This name will be string you have to specify in the `"aggs"` array in the json file of the features schema in order to use your function.
 - Create a new entity extractor: in `features/EntityExtractor.scala`, in the `object` create a new `EntityExtractor` as a `val` and add it to the list `extractors`. The `name` field of your extractor will be the string you have to specify in `conf/application.conf` or with the `--extractor` flag in order to use it.
 - Create a new kind of intrusion / anomaly: in `evaluation/IntrusionKind.scala`, in the `object` create a new function as a `val` of type `String => IntrusionKind` where the input string is the description of the intrusion kind. Then add it to the list `allKinds`. The `name` field of your intrusion kind will be the string you have to use as name in the json file specified by `intrusions` in `conf/application.conf` or by the `--intrusions` flag.

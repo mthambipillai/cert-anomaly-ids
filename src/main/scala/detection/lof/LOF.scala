@@ -146,11 +146,15 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 
 	private def localSensitiveHash(r: Row, as: List[List[Double]], featuresIndex: Int):Row = {
 		val v = r.getAs[Vector](featuresIndex).toArray.toList
-		var total = 0.0
-		as.foreach(a => total+= a.zip(v).foldLeft(0.0){case (sum,(ai, vi)) => sum + ai*vi})
+		val total = as.foldLeft(0.0){case (sum, a) => sum + dotProduct(a,v)}
+		val avg = total / as.size.toDouble
 		val nbDigitsPow = math.pow(10,hashNbDigits).toInt
 		val hash = math.floor(total*nbDigitsPow)/nbDigitsPow
 		Row.fromSeq(r.toSeq :+ hash)
+	}
+
+	private def dotProduct(a: List[Double], v: List[Double]):Double = {
+		a.zip(v).foldLeft(0.0){case (sum,(ai, vi)) => sum + ai*vi}
 	}
 
 	private def getHashes(df: DataFrame, featuresIndexB: Broadcast[Int]):DataFrame = {

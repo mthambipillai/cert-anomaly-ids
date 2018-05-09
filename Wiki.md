@@ -24,27 +24,27 @@ Finally, the reconstructed logs with the tags and comments are persisted to one 
 
 ## Global Parameters
 
-Every parameter has a flag letter and a consistent name between the configuration and the full flag name. So for every entry `param=...` in `conf/application.conf`, there is a corresponding flag `-p, --param <value>`.
+Every parameter has a flag letter and a consistent name between the configuration and the full flag name. So for every entry `param=...` in `conf/application.conf`, there is a corresponding flag `--param <value>` and a shortcut `-p <value>` for non-global parameters.
 
 The following parameters are global parameters, consistent accross the different commands: `extract`, `detect` and `inspect`.
 
-- `-l, --loglevel`: Defines the log level as a string according to the [log4j levels](https://logging.apache.org/log4j/1.2/apidocs/org/apache/log4j/Level.html)
-- `-f, --featuresschema`: Defines the path and name of the json file of the schema that describes the different columns, their types, aggregation functions, etc... More details about it can be found in the Features Schema subsection.
-- `-e, --extractor`: Defines the name of the entity extractor to use (how to define the source and destination entities based on the fields). Every entity extractor needs the original logs schema to contain some specific columns in order to be used. They are specified by the "Requires" list for each of the following already implemented entity extractors :
+- `--loglevel`: Defines the log level as a string according to the [log4j levels](https://logging.apache.org/log4j/1.2/apidocs/org/apache/log4j/Level.html)
+- `--featuresschema`: Defines the path and name of the json file of the schema that describes the different columns, their types, aggregation functions, etc... More details about it can be found in the Features Schema subsection.
+- `--extractor`: Defines the name of the entity extractor to use (how to define the source and destination entities based on the fields). Every entity extractor needs the original logs schema to contain some specific columns in order to be used. They are specified by the "Requires" list for each of the following already implemented entity extractors :
 	- `hostsOnly`: Use only the hostname given by reverse DNS, `NOT_RESOLVED` if it couldn't be resolved. Requires: `["srchost", "dsthost"]`
 	- `ipOnly`: Use only IP addresses. Requires: `["srcip", "dstip"]`
 	- `hostsWithIpFallback` : Use hostname and fallback to the IP address if it couldn't be resolved. Requires: `["srchost", "dsthost", "srcip", "dstip"]`
 	- `hostsWithCountryFallback`: Use hostname and fallback to the country from GeoIP if it couldn't be resolved. Requires: `["srchost","dsthost","srcip_country","dstip_country"]`
 	- `hostsWithOrgFallback`: Use hostname and fallback to the ISP if it couldn't be resolved. Requires: `["srchost","dsthost","srcip_org","dstip_org"]`
-- `-i, --interval`: Defines the size of the time window for the aggregation and the logs reconstruction. It uses the [Scala duration notation](https://www.scala-lang.org/api/current/scala/concurrent/duration/package$$DurationInt.html) so `60 min`, `1 day` or `8 hours` are all valid.
-- `-t, --trafficmode`: In network-based IDSs, aggregated features are called 'traffic features'. This parameter defines whether aggregation is performed per source or destination entity. It can take 2 values : `src` or `dst`.
+- `--interval`: Defines the size of the time window for the aggregation and the logs reconstruction. It uses the [Scala duration notation](https://www.scala-lang.org/api/current/scala/concurrent/duration/package$$DurationInt.html) so `60 min`, `1 day` or `8 hours` are all valid.
+- `--trafficmode`: In network-based IDSs, aggregated features are called 'traffic features'. This parameter defines whether aggregation is performed per source or destination entity. It can take 2 values : `src` or `dst`.
 - `--help`: Prints all the parameters, their usage and a small description in the console.
 
 ### Extract
 
 The following parameters can be placed after the `extract` command :
 
-- `-l, --logspath`: Input path for the logs. The logs must be stored in `parquet` format. The only requirement regarding columns is to have a `timestamp` column. The entity extractors described in the previous subsection might require additional columns. The path accepts wildcards or any other format specific to the file system used. So the example in HDFS the following are all valid: `todaylogs.parquet`, `januarylogs/*`, `logs/year=2018/*/*/*`, `logs/year=2018/month=0{2,3}/*/*`.
+- `-l, --logspath`: Input path for the logs. The logs must be stored in `parquet` format. The only requirement regarding columns is to have a `timestamp` column. The entity extractors described in the previous subsection might require additional columns. The path accepts wildcards or any other format specific to the file system used. So for example in HDFS the following are all valid: `todaylogs.parquet`, `januarylogs/*`, `logs/year=2018/*/*/*`, `logs/year=2018/month=0{2,3}/*/*`.
 - `-s, --scalemode`: Defines how the features are scaled in order to be used by machine learning algorithms. Currently it accepts two modes:
 	- `unit`: Every row is normalized such that the sum of all the fields is 1.0. More info [here](https://en.wikipedia.org/wiki/Feature_scaling#Scaling_to_unit_length).
 	- `rescale`: Every feature column is rescaled such that the range is [0.0, 1.0]. More info [here](https://en.wikipedia.org/wiki/Feature_scaling#Rescaling).
@@ -184,11 +184,22 @@ The following parameters can be tuned:
 - `lowbound`: Defines the cluster size below which points are considered anomalies with 1.0 score.
 - `upbound`: Defines the cluster size above which points are considered normal with 0.0 score.
 
+### Local Outlier Factor
+
+Local Outlier Factor (LOF) is an outlier detection algorithm mostly used in network anomaly detection. It is based on the local density concept: The algorithm computes the k nearest neighbors for each point and their distances. This allows to construct density values for each point than can be compared to the densities of the neighbors, giving a local density value. The LOF value is smaller than 1 for points denser than their neighbors. Values significantly larger than 1 represent outliers. More details about LOF can be found [here](https://en.wikipedia.org/wiki/Local_outlier_factor).
+Since kNN computation is very expensive for large datasets, the implementation uses [locality-sensitive hashing](https://en.wikipedia.org/wiki/Locality-sensitive_hashing) (LSH) to try to repartition the dataset such that points close to each other are in the same partition. The rest of the algorithm can then be computed concurrently in each partition. The LSH function used works as follows : we create a set of vectors with prime components and of the same length of our rows. We sum the dot products of the row with each vector and truncate the last d digits.
+
+The following parameters can be changed:
+
+- `k`: The number of nearest neighbors to consider.
+- `hashnbdigits`: The number of digits after the decimal dot to keep for each hash. A low number means a low number of different hashes so fewer and larger partitions which means slower computations but more likely to have the kNN inside the partition. A large number means a large number of different hashes so more and smalller partitions which means faster computation inside each partition but more likely to have the kNN accross different partitions.
+- `hashnbvects` = number of vectors to create for the dot products with each row.
+
 ## Contributing
 
 You can contribute by adding new features functions, detectors, rules, etc to the ones already implemented.
 
-Here are a few possible extensions :
+Here are a few possible extensions:
 - Create a new aggregate function for features: in `features/Feature.scala`, in the companion `object`, implement a new function of type `String => Column` where the `String` is the column name. You can use already predefined aggregation functions from `import org.apache.spark.sql.functions._` or you can build your own by extending the class `UserDefinedAggregateFunction`. Once you have this function, you can add a `case` in the `getAggFunction` method in `features/FeaturesParser.scala` using a name of your choice. This name will be string you have to specify in the `"aggs"` array in the json file of the features schema in order to use your function.
 - Create a new entity extractor: in `features/EntityExtractor.scala`, in the `object` create a new `EntityExtractor` as a `val` and add it to the list `extractors`. The `name` field of your extractor will be the string you have to specify in `conf/application.conf` or with the `--extractor` flag in order to use it.
 - Create a new kind of intrusion / anomaly: in `evaluation/IntrusionKind.scala`, in the `object` create a new function as a `val` of type `String => IntrusionKind` where the input string is the description of the intrusion kind. Then add it to the list `allKinds`. The `name` field of your intrusion kind will be the string you have to use as name in the json file specified by `intrusions` in `conf/application.conf` or by the `--intrusions` flag.

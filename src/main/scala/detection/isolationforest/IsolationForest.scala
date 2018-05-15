@@ -1,3 +1,10 @@
+/*
+* © Copyright 2018 CERN
+* This software is distributed under the terms of the GNU General Public Licence version 3 (GPL  
+* Version 3), copied verbatim in the file “COPYING”.
+* In applying this licence, CERN does not waive the privileges and immunities granted to it by virtue of its 
+* status as an Intergovernmental Organization or submit itself to any jurisdiction.
+*/
 package isolationforest
 import scala.math.{log,ceil}
 import org.apache.spark.sql.DataFrame
@@ -10,11 +17,6 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.Await
-/*
-* © Copyright 2018 CERN
-* This software is distributed under the terms of the GNU General Public Licence version 3 (GPL  
-* Version 3), copied verbatim in the file “COPYING”.
-*/
 import scala.concurrent.duration._
 
 /*

@@ -16,10 +16,11 @@ BuildRequires:  java-1.8.0-openjdk
 Requires:       java-1.8.0-openjdk
 BuildArch:      noarch
 
-Source:        %{name}-assembly-%{version}.jar
+Source:         %{name}-assembly-%{version}.jar
+Source1:        ../../install.sh
 
 %description
-Anomaly-based and network-based IDS designed on top of Apache Spark for analyzing big amounts of logs stored in Big Data systems like HDFS.
+Anomaly-based IDS designed on top of Apache Spark for analyzing big amounts of logs stored in Big Data systems like HDFS.
 
 %prep
 %setup -q -cT
@@ -32,6 +33,7 @@ rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/opt/cert-anomaly-ids/
 
 install -m644 %{SOURCE0} $RPM_BUILD_ROOT/opt/%{name}/%{name}-%{version}.jar
+sh %{SOURCE1} %{name} %{version}
 
 %clean
 rm -rf ${RPM_BUILD_ROOT}

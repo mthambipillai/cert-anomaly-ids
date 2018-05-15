@@ -15,7 +15,7 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-buildroot
 BuildRequires:  java-1.8.0-openjdk
 BuildArch:      noarch
 
-Source:        %{name}-%{version}.jar
+Source:        %{name}-assembly-%{version}.jar
 
 %description
 Anomaly-based and network-based IDS designed on top of Apache Spark for analyzing big amounts of logs stored in Big Data systems like HDFS.

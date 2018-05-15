@@ -1,4 +1,4 @@
-name := "CERT-Anomaly-IDS"
+name := "cert-anomaly-ids"
 
 version := "1.0"
 

@@ -1,3 +1,8 @@
+/*
+* © Copyright 2018 CERN
+* This software is distributed under the terms of the GNU General Public Licence version 3 (GPL  
+* Version 3), copied verbatim in the file “COPYING”.
+*/
 package evaluation
 /*
 An Intrusion is the result of the injection of fake logs by an IntrusionKind on some data.

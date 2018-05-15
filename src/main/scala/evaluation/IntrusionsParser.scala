@@ -1,3 +1,8 @@
+/*
+* © Copyright 2018 CERN
+* This software is distributed under the terms of the GNU General Public Licence version 3 (GPL  
+* Version 3), copied verbatim in the file “COPYING”.
+*/
 package evaluation
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule

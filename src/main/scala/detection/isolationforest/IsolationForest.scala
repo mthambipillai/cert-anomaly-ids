@@ -10,6 +10,11 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.Await
+/*
+* © Copyright 2018 CERN
+* This software is distributed under the terms of the GNU General Public Licence version 3 (GPL  
+* Version 3), copied verbatim in the file “COPYING”.
+*/
 import scala.concurrent.duration._
 
 /*

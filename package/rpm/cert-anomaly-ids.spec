@@ -7,12 +7,13 @@ Release:        1%{?dist}
 
 
 Summary:        Anomaly-based Intrusion Detection System
-Group:          Development/Tools
+Group:          Security/Tools
 License:        GPLv2+
 URL:            https://gitlab.cern.ch/ComputerSecurity/cert-anomaly-ids
 Vendor:         CERN, http://cern.ch/linux
 BuildRoot:      %{_tmppath}/%{name}-%{version}-buildroot
 BuildRequires:  java-1.8.0-openjdk
+Requires:       java-1.8.0-openjdk
 BuildArch:      noarch
 
 Source:        %{name}-assembly-%{version}.jar

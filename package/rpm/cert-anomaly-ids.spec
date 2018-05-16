@@ -17,7 +17,8 @@ Requires:       java-1.8.0-openjdk
 BuildArch:      noarch
 
 Source:         %{name}-assembly-%{version}.jar
-Source1:        ../../install.sh
+Source1:        cert-anomaly-ids_env.sh
+Source2:        cert-anomaly-ids
 
 %description
 Anomaly-based IDS designed on top of Apache Spark for analyzing big amounts of logs stored in Big Data systems like HDFS.
@@ -31,9 +32,13 @@ Anomaly-based IDS designed on top of Apache Spark for analyzing big amounts of l
 
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/opt/cert-anomaly-ids/
+mkdir -p $RPM_BUILD_ROOT/opt/cert-anomaly-ids/bin/
+mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/profile.d/
 
 install -m644 %{SOURCE0} $RPM_BUILD_ROOT/opt/%{name}/%{name}-%{version}.jar
-sh %{SOURCE1} %{name} %{version}
+ln -s /opt/%{name}/%{name}-%{version}.jar $RPM_BUILD_ROOT/opt/%{name}/%{name}.jar
+install -m644 %{SOURCE1} $RPM_BUILD_ROOT/%{_sysconfdir}/profile.d/cert-anomaly-ids_env.sh
+install -m644 %{SOURCE2} $RPM_BUILD_ROOT/opt/%{name}/bin/cert-anomaly-ids
 
 %clean
 rm -rf ${RPM_BUILD_ROOT}
@@ -41,6 +46,9 @@ rm -rf ${RPM_BUILD_ROOT}
 %files
 
 %defattr(-,root,root)
-%attr(644, root, root) /opt/cert-anomaly-ids/%{name}-%{version}.jar
+%attr(644, root, root) /opt/%{name}/%{name}-%{version}.jar
+/opt/%{name}/%{name}.jar
+%attr(755, root, root) /opt/%{name}/bin/cert-anomaly-ids
+%config %{_sysconfdir}/profile.d/cert-anomaly-ids_env.sh
 
 %changelog

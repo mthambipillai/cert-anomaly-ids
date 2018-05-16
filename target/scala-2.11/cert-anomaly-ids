@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+spark-submit $RPM_BUILD_ROOT/opt/cert-anomaly-ids/cert-anomaly-ids.jar "$@"
+

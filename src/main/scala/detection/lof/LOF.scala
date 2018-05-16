@@ -16,12 +16,21 @@ import org.apache.spark.sql.functions._
 import scala.collection.mutable.PriorityQueue
 import org.apache.spark.broadcast.Broadcast
 
+/*
+Implements the Local Outlier Factor algorithm with a custom LSH technique for in-partition computing.
+More details can be found in the wiki.
+*/
 class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) extends Serializable{
 
 	object KNNOrder extends Ordering[(Int,Double)] {
 		def compare(x:(Int,Double), y:(Int,Double)) = x._2 compare y._2
 	}
 
+	/*
+	Appends a 'lof' column to 'data' with the LOF scores computed from the features. The data
+	is first repartitioned according to LSH so that the computation can be done within each
+	partition independantly.
+	*/
 	def transform(data: DataFrame):DataFrame = {
 		val featuresIndex = data.columns.indexOf("features")
 		val featuresIndexB = spark.sparkContext.broadcast(featuresIndex)
@@ -44,21 +53,28 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 		res
 	}
 
+	/*
+	Computes the k-distance and the distances to each kNN for each row in 'rows'. The IDs for each
+	row are computed as well by using their index in the array and the partition index 'pIndex'.
+	The schema is extended in the following way : r => rID | kDist | knnIDs | knnDists | r.
+	*/
 	private def getKDistances(pIndex: Int, rows: Array[Row], featuresIndex: Int, k: Int):List[Row] = {
-		//println("Computing KNNs and their distances...")
 		val distances = computeDistanceMatrix(rows, featuresIndex)
 		val partID = ""+pIndex
 		rows.toList.zipWithIndex.map{ case (r,index) => {
 			val rID = (partID+index).toInt
-			val (kDist, knns) = getKNN(index, distances(index), k, partID)
+			val (kDist, knns) = getKNNs(index, distances(index), k, partID)
 			val (ids, dists) = knns.unzip
 			Row.fromSeq(rID +: (Seq(kDist, ids.toArray, dists.toArray) ++ r.toSeq))
 		}}
-		//schema: r => rID | kDist | knnIDs | knnDists | r
 	}
 
+	/*
+	Computes for each row in 'rows' the reachability distances for each kNN from the
+	k-distance and the distances to the kNNs. The schema is extended in the following way :
+	rID | kDist | knnIDs | knnDists | r => rID | knnIDs | knnReachDists | r
+	*/
 	private def getReachabilityDistances(rows: List[Row]):List[Row] = {
-		//println("Computing reachability distances...")
 		rows.map(r => {
 			val knnIDs = r.getAs[Array[Int]](2)
 			val knnDists = r.getAs[Array[Double]](3)
@@ -67,22 +83,28 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 			val seq = r.toSeq
 			Row.fromSeq(Seq(seq.head, newIDs, reachDists) ++ seq.drop(4))
 		})
-		//schema: rID | kDist | knnIDs | knnDists | r => rID | knnIDs | knnReachDists | r
 	}
 
+	/*
+	Computes for each row in 'rows' the local reachability density from the 
+	reachability distances. The schema is extended in the following way :
+	rID | knnIDs | knnReachDists | r => rID | knnIDs | LRD | r
+	*/
 	private def getLRDs(rows: List[Row], k: Int):List[Row] = {
-		//println("Computing local reachability densities...")
 		rows.map(r => {
 			val reachDists = r.getAs[Array[Double]](2)
 			val lrd = reachDists.sum / k.toDouble
 			val seq = r.toSeq
 			Row.fromSeq(seq.take(2) ++ (lrd +: seq.drop(3)))
 		})
-		//schema: rID | knnIDs | knnReachDists | r => rID | knnIDs | LRD | r
 	}
 
+	/*
+	Computes for each row in 'rows' the local outlier factor from the local reachability
+	density of the row and the ones of the kNNs. The schema is extended in the following way :
+	rID | knnIDs | LRD | r => r, LOF
+	*/
 	private def getLOFs(rows: List[Row], k: Int):List[Row] = {
-		//println("Computing local outlier factors...")
 		rows.map(r => {
 			val knnIDs = r.getAs[Array[Int]](1)
 			val knnLRDs = knnIDs.flatMap(id =>
@@ -92,7 +114,6 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 			Row.fromSeq(seq.drop(3) :+ lof)
 
 		})
-		//schema: rID | knnIDs | LRD | r => r, LOF
 	}
 
 	private def getReachDist(rows: List[Row], rowID: Int, dist: Double):Option[Double] = {
@@ -102,6 +123,9 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 		rows.find(r => r.getInt(0)==rowID).map(_.getDouble(1))
 	}
 
+	/*
+	Computes the distances between each row in 'rows' and return them as a 2 dimensional matrix.
+	*/
 	private def computeDistanceMatrix(rows: Array[Row], featuresIndex: Int):Array[Array[Double]] = {
 		val distances = Array.ofDim[Double](rows.length,rows.length)
 		for(i <- 0 to rows.length - 2 ){
@@ -114,7 +138,13 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 		distances
 	}
 
-	private def getKNN(sourceIndex: Int, distancesToOthers: Array[Double], k: Int,
+	/*
+	Finds the k-Nearest Neighbours (kNN) for the row with index 'sourceIndex' using
+	the previously computed distances to other rows 'distancesToOthers'. Returns
+	the k-distance (maximum of the distances to kNNs) and the list of kNNs IDs (using
+	the partition index 'partID') and their distances to the considered row.
+	*/
+	private def getKNNs(sourceIndex: Int, distancesToOthers: Array[Double], k: Int,
 		partID: String): (Double,List[(Int,Double)]) = {
 		var count = 0
 		var kDist = 0.0
@@ -145,12 +175,19 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 		(kDist, maxHeap.toList)
 	}
 
+	/*
+	Computes the squared euclidean distance between r1 and r2.
+	*/
 	private def distance(r1: Row, r2: Row, featuresIndex: Int):Double = {
 		val v1 = r1.getAs[Vector](featuresIndex)
 		val v2 = r2.getAs[Vector](featuresIndex)
 		Vectors.sqdist(v1, v2)
 	}
 
+	/*
+	Computes the locality-sensitive hash for the row 'r' using the 'as' vectors as described
+	in the documentation. It returns the row extended with a new field for the hash.
+	*/
 	private def localSensitiveHash(r: Row, as: List[List[Double]], featuresIndex: Int):Row = {
 		val v = r.getAs[Vector](featuresIndex).toArray.toList
 		val total = as.foldLeft(0.0){case (sum, a) => sum + dotProduct(a,v)}
@@ -164,6 +201,10 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 		a.zip(v).foldLeft(0.0){case (sum,(ai, vi)) => sum + ai*vi}
 	}
 
+	/*
+	Computes the locality-sensitive hashes for every row in 'df' and put them in a 
+	new 'hash' column.
+	*/
 	private def getHashes(df: DataFrame, featuresIndexB: Broadcast[Int]):DataFrame = {
 		println("Computing the hashes...")
 		val newSchema = df.schema.add(StructField("hash", DoubleType, true))
@@ -182,34 +223,5 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 			val as = asB.value
 			iter.map(r => localSensitiveHash(r, as, featuresIndex))
 		})(encoder)
-	}
-
-	private def meanDistToOthers(rows: Array[Row], index: Int, featuresIndex: Int):Double = {
-		if(rows.length==1) return 0.0
-		(0 to rows.length - 1).foldLeft(0.0){case (prevSum, i) => {
-			if(i!=index){
-				prevSum + distance(rows(index), rows(i), featuresIndex)
-			}else{
-				prevSum
-			}
-		}}
-	}
-
-	private def meanDist(rows: Array[Row], featuresIndex: Int):Double = {
-		if(rows.length==0) return 0.0
-		val meanDists = (0 to rows.length - 1).map(i => meanDistToOthers(rows, i, featuresIndex))
-		meanDists.sum / (rows.length*rows.length).toDouble
-	}
-
-	private def getMeanDist(df: DataFrame, featuresIndex: Int, accName: String):Double = {
-		val counter = spark.sparkContext.doubleAccumulator(accName)
-		val featuresIndexB = spark.sparkContext.broadcast(featuresIndex)
-		df.foreachPartition(iter => {
-			val featuresIndex = featuresIndexB.value
-			var arr = iter.toArray
-			val res = meanDist(arr, featuresIndex)
-			counter.add(res)
-		})
-		counter.value
 	}
 }

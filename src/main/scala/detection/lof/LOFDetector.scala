@@ -12,6 +12,9 @@ import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.SparkSession
 
+/*
+This detector implements the LOF algorithm and maps the scores to a new scale.
+*/
 class LOFDetector(spark: SparkSession, data: DataFrame, k: Int, hashNbDigits: Int,
 	hashNbVects: Int, knownMaxScore: Double) extends Detector{
 
@@ -26,14 +29,20 @@ class LOFDetector(spark: SparkSession, data: DataFrame, k: Int, hashNbDigits: In
 
 	override def detect(threshold: Double):DataFrame = {
 		println("\nStarting to detect with Local Outlier Factor...\n")
-		mapToScores(lofModel.transform(assembled).drop("features"), threshold)
+		mapToScoresAndFilter(lofModel.transform(assembled).drop("features"), threshold)
 	}
 
 	private def scoreUDF(maxScore: Double) = udf((x:Double) => {
 		val temp = x/maxScore
 		if(temp<1.0) temp else 1.0
 	})
-	private def mapToScores(lofs: DataFrame, threshold: Double):DataFrame = {
+
+	/*
+	The LOF scores are on an open scale so they need to be mapped between 0.0 and 1.0
+	From the maximum score and the threshold, the threshold score can be computed to filter
+	and keep only the anomalies. The new scores are added in a new 'lof_score' column.
+	*/
+	private def mapToScoresAndFilter(lofs: DataFrame, threshold: Double):DataFrame = {
 		val maxScore = if(knownMaxScore == -1){
 			val minMax = lofs.agg(min("lof"),max("lof")).head
 			val maxS = minMax.getDouble(1)

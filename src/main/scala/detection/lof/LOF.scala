@@ -93,7 +93,7 @@ class LOF(spark: SparkSession, k: Int, hashNbDigits: Int, hashNbVects: Int) exte
 	private def getLRDs(rows: List[Row], k: Int):List[Row] = {
 		rows.map(r => {
 			val reachDists = r.getAs[Array[Double]](2)
-			val lrd = reachDists.sum / k.toDouble
+			val lrd =  k.toDouble / reachDists.sum
 			val seq = r.toSeq
 			Row.fromSeq(seq.take(2) ++ (lrd +: seq.drop(3)))
 		})

@@ -7,6 +7,7 @@
 */
 package features
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import scala.util.Try
 import scalaz._
@@ -21,7 +22,7 @@ case class EntityExtractor(
 	val name: String,
 	val requiredColumns: List[String],
 	private val extractAux: (DataFrame, List[Feature], String) => (DataFrame, List[Feature]),
-	private val reverseAux: String => (String, String)
+	private val reverseAux: (String,String) => List[(String, String)]
 )
 {
 	/*
@@ -48,70 +49,136 @@ case class EntityExtractor(
 	Returns the original column name and the original value that was converted to
 	'entityValue' in the entity extraction phase.
 	*/
-	def reverse(entityValue: String):String\/(String, String) = {
-		val (colType, value) = reverseAux(entityValue)
-		if(requiredColumns.contains("src"+colType) || requiredColumns.contains("dst"+colType)){
-			(colType, value).right
+	def reverse(eType: String, entityValue: String):String\/(String, String) = {
+		val (colName, value) = reverseAux(eType, entityValue).head
+		if(requiredColumns.contains(colName)){
+			(colName, value).right
 		}else{
 			("The original column must be a required column.").left
 		}
+	}
+
+	def reverse2(eType: String, entityValue: String):String\/String = {
+		val clausesDisj = reverseAux(eType, entityValue).traverseU{ case (colName, value) =>
+			if(requiredColumns.contains(colName)){
+				(colName+"='"+value+"'").right
+			}else{
+				("The original column must be a required column.").left
+			}
+		}
+		clausesDisj.map(clauses => clauses.mkString(" AND "))
 	}
 }
 
 object EntityExtractor{
 
 	//entities are made only from the hostnames
-	val hostsOnly = EntityExtractor("hostsOnly",List("srchost","dsthost"), (df, features, eType) => {
+	def hostsOnly(spark: SparkSession):EntityExtractor = EntityExtractor(
+		"hostsOnly",List("srchost","dsthost"), (df, features, eType) => {
 		val df2 = df.withColumnRenamed("srchost","srcentity").withColumnRenamed("dsthost","dstentity").drop("srcip").drop("dstip")
 		val filtered = features.filter(f => !(List("srchost","dsthost","srcip","dstip").contains(f.name)))
-		(df2, addEntityFeatures(Feature.parseEntityCol, Feature.parseEntityCol, filtered, eType))
-	}, x=> ("host",x))
+		(df2, addEntityFeatures(Feature.parseEntityCol(spark), Feature.parseEntityCol(spark), filtered, eType))
+	}, (eType,x) => List((eType+"host",x)))
 
 	//entities are made only from the ip addresses
-	val ipOnly = EntityExtractor("ipOnly",List("srcip","dstip"), (df, features, eType) => {
+	def ipOnly(spark: SparkSession):EntityExtractor = EntityExtractor(
+		"ipOnly",List("srcip","dstip"), (df, features, eType) => {
 		val df2 = df.withColumnRenamed("srcip","srcentity").withColumnRenamed("dstip","dstentity").drop("srchost").drop("dsthost")
 		val filtered = features.filter(f => !(List("srchost","dsthost","srcip","dstip").contains(f.name)))
-		(df2, addEntityFeatures(Feature.parseEntityCol, Feature.parseEntityCol, filtered, eType))
-	}, x=> ("ip",x))
+		(df2, addEntityFeatures(Feature.parseEntityCol(spark), Feature.parseEntityCol(spark), filtered, eType))
+	}, (eType,x) => List((eType+"ip",x)))
 
 	private val fallbackUDF = udf((host: String, fallback: String) => if(host==null || host=="NOT_RESOLVED") "F"+fallback else host)
 
 	//entities are made from hostname if it could be resolved, ip address otherwise
-	val hostsWithIpFallback = EntityExtractor("hostsWithIpFallback",List("srchost","dsthost","srcip","dstip"), (df, features, eType) => {
-		hostsFallback(df, features, "srcip", "dstip", eType)
+	def hostsWithIpFallback(spark: SparkSession):EntityExtractor = EntityExtractor(
+		"hostsWithIpFallback",List("srchost","dsthost","srcip","dstip"), (df, features, eType) => {
+		hostsFallback(spark)(df, features, "srcip", "dstip", eType)
 	}, reverseFallback("ip"))
 
 	//entities are made from hostname if it could be resolved, country otherwise
-	val hostsWithCountryFallback = EntityExtractor("hostsWithCountryFallback",List("srchost","dsthost","srcip_country","dstip_country"), (df, features, eType) => {
-		hostsFallback(df, features, "srcip_country", "dstip_country", eType)
+	def hostsWithCountryFallback(spark: SparkSession):EntityExtractor = EntityExtractor(
+		"hostsWithCountryFallback",List("srchost","dsthost","srcip_country","dstip_country"), (df, features, eType) => {
+		hostsFallback(spark)(df, features, "srcip_country", "dstip_country", eType)
 	}, reverseFallback("ip_country"))
 
 	//entities are made from hostname if it could be resolved, organization otherwise
-	val hostsWithOrgFallback = EntityExtractor("hostsWithOrgFallback",List("srchost","dsthost","srcip_org","dstip_org"), (df, features, eType) => {
-		hostsFallback(df, features, "srcip_org", "dstip_org", eType)
+	def hostsWithOrgFallback(spark: SparkSession):EntityExtractor = EntityExtractor(
+		"hostsWithOrgFallback",List("srchost","dsthost","srcip_org","dstip_org"), (df, features, eType) => {
+		hostsFallback(spark)(df, features, "srcip_org", "dstip_org", eType)
 	}, reverseFallback("ip_org"))
 
-	val extractors = List(hostsOnly, ipOnly, hostsWithIpFallback, hostsWithCountryFallback, hostsWithOrgFallback)
-	val defaultExtractor = hostsWithIpFallback
+	//entities are made from the user id if src or from host name if dst
+	private val toStringUDF = udf((x: Int) => x+"")
+	def uidOnlyAndHost(spark: SparkSession):EntityExtractor = EntityExtractor(
+		"uidOnlyAndHost",List("uid","host"), (df, features, eType) => {
+		val df2 = df.withColumn("srcentity", toStringUDF(col("uid"))).drop("uid").withColumnRenamed("host","dstentity").drop("host")
+		val filtered = features.filter(f => !(List("uid","host").contains(f.name)))
+		(df2, addEntityFeatures(Feature.parseEntityCol(spark), Feature.parseEntityCol(spark), filtered, eType))
+	}, (eType,x) => if(eType=="src") List(("uid",x)) else List(("host",x)))
 
-	def getByName(name: String): EntityExtractor = extractors.find(e => e.name==name) match{
-		case Some(ee) => ee
-		case None => defaultExtractor
+	//entities are made from the user id if src or from host name if dst
+	private val srcUDF = udf((uid: Int, ppid:Int, host:String) => 
+		if(uid==0){
+			uid+","+ppid+","+host
+		}else{
+			if(uid<1000){
+				uid+","+host
+			}else{
+				uid+""
+			}
+		}
+	)
+	def uid0AndHost(spark: SparkSession):EntityExtractor = EntityExtractor(
+		"uid0AndHost",List("uid","ppid","host"), (df, features, eType) => {
+		val df2 = df.withColumn("srcentity", srcUDF(df("uid"),df("ppid"),df("host"))).drop("uid").withColumnRenamed("host","dstentity").drop("host")
+		val filtered = features.filter(f => !(List("uid","ppid","host").contains(f.name)))
+		(df2, addEntityFeatures(Feature.parseEntityCol(spark), Feature.parseEntityCol(spark), filtered, eType))
+	}, (eType,x) => if(eType=="src") parseUid(x) else List(("host",x)))
+
+	private def parseUid(srcValue: String):List[(String,String)] = {
+		val parts = srcValue.split(",")
+		if(parts.size==1){
+			List(("uid",srcValue))
+		}else{
+			if(parts.size==2){
+				List(("uid",parts(0)), ("host",parts(1)))
+			}else{
+				List(("uid",parts(0)), ("ppid",parts(1)), ("host",parts(2)))
+			}
+		}
 	}
 
-	private def reverseFallback(fallbackCol: String)(value: String):(String, String)={
-		if(value.head=='F') (fallbackCol, value.tail) else ("host",value)
+	def extractors(spark: SparkSession):List[EntityExtractor] = List(
+		hostsOnly(spark),
+		ipOnly(spark),
+		hostsWithIpFallback(spark),
+		hostsWithCountryFallback(spark),
+		hostsWithOrgFallback(spark),
+		uidOnlyAndHost(spark),
+		uid0AndHost(spark))
+
+	def defaultExtractor(spark: SparkSession) = hostsWithIpFallback(spark)
+
+	def getByName(spark: SparkSession, name: String): EntityExtractor = extractors(spark).find(e => e.name==name) match{
+		case Some(ee) => ee
+		case None => defaultExtractor(spark)
+	}
+
+	private def reverseFallback(fallbackCol: String)(eType: String, value: String):List[(String, String)]={
+		if(value.head=='F') List((eType+fallbackCol, value.tail)) else List((eType+"host",value))
 	}
 
 	/*
 	Returns the dataframe 'df' and the features 'features' with the 2 additional features for entities made from hostname if
 	it could be resolved, from 'srcCol' and 'dstCol' otherwise.
 	*/
-	private def hostsFallback(df: DataFrame, features : List[Feature], srcCol: String, dstCol: String, eType: String):(DataFrame, List[Feature]) = {
+	private def hostsFallback(spark: SparkSession)(df: DataFrame, features : List[Feature],
+		srcCol: String, dstCol: String, eType: String):(DataFrame, List[Feature]) = {
 		val df2 = df.withColumn("srcentity",fallbackUDF(df("srchost"),df(srcCol))).drop("srcip").drop("srchost")
 		val df3 = df2.withColumn("dstentity",fallbackUDF(df("dsthost"),df(dstCol))).drop("dstip").drop("dsthost")
 		val filtered = features.filter(f => !(List("srchost","dsthost","srcip","dstip").contains(f.name)))
-		(df3, addEntityFeatures(Feature.parseEntityCol, Feature.parseEntityCol, filtered, eType))
+		(df3, addEntityFeatures(Feature.parseEntityCol(spark), Feature.parseEntityCol(spark), filtered, eType))
 	}
 
 	private def addEntityFeatures(

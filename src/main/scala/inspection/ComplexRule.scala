@@ -17,9 +17,10 @@ match the condition. It has an accumulator to compute a value accross all logs a
 evaluate that resulting value with the condition.
 */
 case class ComplexRule(
-	name: String,
+	val name: String,
+	override val requiredCols: List[String],
 	private val flagAux: (StructType, List[Row], DoubleAccumulator) => (Boolean, List[String])
-) extends Rule((s: StructType, r: List[Row], a: Option[DoubleAccumulator]) =>
+) extends Rule(requiredCols, (s: StructType, r: List[Row], a: Option[DoubleAccumulator]) =>
 	flagAux(s, r,ComplexRule.validateAcc(a, name))){
 	@Override
 	def initAcc(spark: SparkSession):Option[DoubleAccumulator] = Some(spark.sparkContext.doubleAccumulator(name))

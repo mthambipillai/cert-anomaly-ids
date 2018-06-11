@@ -20,8 +20,9 @@ A SimpleRule is a Rule that considers each log entry of the anomaly individually
 one of them matches the condition, the anomaly is considered a true positive.
 */
 case class SimpleRule(
+	override val requiredCols: List[String],
 	private val flagAux: (StructType, List[Row]) => (Boolean, List[String])
-) extends Rule((s: StructType, r: List[Row], a: Option[DoubleAccumulator]) => flagAux(s,r)){
+) extends Rule(requiredCols, (s: StructType, r: List[Row], a: Option[DoubleAccumulator]) => flagAux(s,r)){
 	@Override
 	def initAcc(spark: SparkSession):Option[DoubleAccumulator] = None
 }
@@ -39,7 +40,7 @@ object SimpleRule{
 	* @param commentText  text to append to the comments field in case the row matched the rule.
 	*/
 	def makeSimpleRule[T](fieldName: String, nullFallBack: T, rowF: (Row, Int) => T,
-		checkF: T => Boolean, commentText: String):SimpleRule = SimpleRule((schema, rows) => {
+		checkF: T => Boolean, commentText: String):SimpleRule = SimpleRule(List(fieldName), (schema, rows) => {
 		val index = schema.fieldIndex(fieldName)
 		val tags = rows.map(r => {
 			val v = if(r.isNullAt(index)) nullFallBack else rowF(r, index)

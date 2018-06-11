@@ -1,0 +1,94 @@
+{
+  "name" : "ExecLogs",
+  "features" : [ {
+    "name" : "euid",
+    "parent" : null,
+    "type" : "Int",
+    "doc" : "Effective UNIX user ID.",
+    "aggs" : ["countdistinct"]
+  }, {
+    "name" : "pid",
+    "parent" : null,
+    "type" : "Int",
+    "doc" : "Process ID.",
+    "aggs" : ["countdistinct"]
+  }, {
+    "name" : "toplevel_hostgroup",
+    "parent" : null,
+    "type" : "String",
+    "doc" : "Top level host group.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "argv",
+    "parent" : null,
+    "type" : "String",
+    "doc" : "Executed command.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "sid",
+    "parent" : null,
+    "type" : "Int",
+    "doc" : "Security identifier.",
+    "aggs" : []
+  }, {
+    "name" : "ppid",
+    "parent" : null,
+    "type" : "Int",
+    "doc" : "Parent process ID.",
+    "aggs" : ["countdistinct"]
+  }, {
+    "name" : "uid",
+    "parent" : null,
+    "type" : "Int",
+    "doc" : "User ID.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "egid",
+    "parent" : null,
+    "type" : "Int",
+    "doc" : "Effective UNIX group ID.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "environment",
+    "parent" : null,
+    "type" : "String",
+    "doc" : "Environment of the host.",
+    "aggs" : ["mostcommon"]
+  }, {
+    "name" : "file",
+    "parent" : null,
+    "type" : "String",
+    "doc" : "Executable file that was executed.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "deleted",
+    "parent" : null,
+    "type" : "Boolean",
+    "doc" : "Whether file was deleted.",
+    "aggs" : ["mostcommon"]
+  }, {
+    "name" : "host",
+    "parent" : null,
+    "type" : "String",
+    "doc" : "Host name of the machine.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "hostgroup",
+    "parent" : null,
+    "type" : "String",
+    "doc" : "Host group.",
+    "aggs" : ["mostcommon","countdistinct"]
+  }, {
+    "name" : "timestamp",
+    "parent" : null,
+    "type" : "Long",
+    "doc" : "Time of the execution.",
+    "aggs" : []
+  }, {
+    "name" : "lastboot",
+    "parent" : null,
+    "type" : "Double",
+    "doc" : "Time since system boot.",
+    "aggs" : ["max"]
+  } ]
+}

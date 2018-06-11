@@ -35,21 +35,26 @@ class Inspector(spark: SparkSession){
 	Applies each rule in 'rules' to each of the reconstructed logs in 'allLogs'. Precision is
 	then printed and the tagged results are persisted to 'resultsFile'.
 	*/
-	def inspectLogs(allLogs: List[DataFrame], rules: List[Rule], resultsFile: String):Unit = {
+	def inspectLogs(allLogs: List[DataFrame], rules: List[Rule], resultsFile: String):String\/Unit = {
 		val nbCols = allLogs.head.columns.size
 		val tagIndexB = spark.sparkContext.broadcast(nbCols-2)
 		val commentIndexB = spark.sparkContext.broadcast(nbCols-1)
 		val newSchema = allLogs.head.schema
 		val encoder = RowEncoder(newSchema)
 		println("Inspecting logs...")
-		val dfs = allLogs.map(df => flag(df, rules, newSchema, encoder, tagIndexB, commentIndexB))
-		val all = dfs.tail.foldLeft(dfs.head)(_.union(_))
+		for{
+			dfs <- allLogs.traverseU(df =>
+				flag(df, rules, newSchema, encoder, tagIndexB, commentIndexB))
+		}yield{
+			printPrecision(dfs, resultsFile)
 
-		printPrecision(all, dfs.size, resultsFile)
-
-		println("Writing results to "+resultsFile+"...")
-		all.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv")
-		.option("header", "true").save(resultsFile)
+			println("Writing results to "+resultsFile+"...")
+			dfs.zipWithIndex.map{case (df,i) =>
+				df.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv")
+					.option("header", "true")
+					.option("delimiter", "\t")
+					.save(resultsFile+"/anomaly"+i)}
+		}
 	}
 
 	/*
@@ -66,8 +71,8 @@ class Inspector(spark: SparkSession){
 	*/
 	def getAllLogs(filePath: String, features: List[Feature], extractor: String, anomaliesFile: String,
 		eType: String, interval: Duration, recall: Boolean, intrusionsDir: String):String\/(List[DataFrame],List[DataFrame])={
-		val ee = EntityExtractor.getByName(extractor)
-		val featuresNames = features.map(_.name)
+		val ee = EntityExtractor.getByName(spark, extractor)
+		val featuresNames = features.filter(_.parent.isEmpty).map(_.name)
 		val featuresString = featuresNames.mkString(",")
 		for{
 			tempLogFile <- Try(spark.read.parquet(filePath)).toDisjunction.leftMap(e =>
@@ -106,7 +111,7 @@ class Inspector(spark: SparkSession){
 			val beginTimestamp = row.getString(1).toDouble.toLong
 			val endTimeStamp = beginTimestamp+interval.toMillis
 			val stmt = "SELECT * FROM injectedLogs WHERE srchost='"+row.getString(0)+
-				"' AND timestamp>="+beginTimestamp+" AND timestamp<="+endTimeStamp
+				"' AND timestamp>="+beginTimestamp+" AND timestamp<="+endTimeStamp+" LIMIT 10000"
 			spark.sql(stmt).sort(asc("timestamp"))
 		})
 	}
@@ -115,8 +120,12 @@ class Inspector(spark: SparkSession){
 	Filter the logs 'all' to count the ones that were flagged as anomalies, then compute
 	precision using 'nbAll' and print it.
 	*/
-	private def printPrecision(all: DataFrame, nbAll:Int, resultsFile: String):Unit = {
-		val nbPositives = all.filter(col("anomalytag")===lit("yes")).count.toInt
+	private def printPrecision(dfs: List[DataFrame], resultsFile: String):Unit = {
+		val anomalyTagIndex = dfs.head.columns.size - 2
+		val nbPositives = dfs.map(df =>
+			df.head.getString(anomalyTagIndex)).filter(t => t=="yes").size
+		//val nbPositives = all.filter(col("anomalytag")===lit("yes")).count.toInt
+		val nbAll = dfs.size
 		val nbNegatives = nbAll - nbPositives
 		val precision = (nbPositives.toDouble/nbAll.toDouble)*100.0
 		println("Number of detected anomalies tagged as true anomalies (Precision) : "+
@@ -151,16 +160,15 @@ class Inspector(spark: SparkSession){
 	}
 
 	private def getStmt(row: Row, featuresString: String, interval: Duration,
-		eType: String, ee: EntityExtractor):String\/String ={
+		eType: String, ee: EntityExtractor):String\/String = {
 		val entity = row.getString(0)
 		val beginTimestamp = row.getString(1).toDouble.toLong
 		val endTimeStamp = beginTimestamp+interval.toMillis
 		for{
-			(colType, originalEntity) <- ee.reverse(entity)
+			clause <- ee.reverse2(eType, entity)
 		}yield{
-			val col = eType+colType
-			"SELECT "+featuresString+" FROM logfiles WHERE "+col+"='"+originalEntity+
-				"' AND timestamp>="+beginTimestamp+" AND timestamp<="+endTimeStamp
+			"SELECT "+featuresString+" FROM logfiles WHERE "+clause+
+				" AND timestamp>="+beginTimestamp+" AND timestamp<="+endTimeStamp
 		}
 	}
 
@@ -169,7 +177,7 @@ class Inspector(spark: SparkSession){
 		val df2 = df.withColumn("timestamp2", toDate(dateFormatter)(df("timestamp")))
 			.drop("timestamp").withColumnRenamed("timestamp2", "timestamp")
 		val newCols = "timestamp"::df2.columns.toList.dropRight(1)
-		df2.select(newCols.head, newCols.tail:_*).coalesce(1)
+		df2.select(newCols.head, newCols.tail:_*)
 	}
 
 	/*
@@ -177,17 +185,28 @@ class Inspector(spark: SparkSession){
 	in 'rules' is applied.
 	*/
 	private def flag(logs: DataFrame, rules: List[Rule], schema: StructType, encoder: ExpressionEncoder[Row],
-		tagIndexB: Broadcast[Int], commentIndexB: Broadcast[Int]):DataFrame = {
-		val rulesWithAccsB = spark.sparkContext.broadcast(rules.map(r => (r, r.initAcc(spark))))
-		logs.mapPartitions(iter => {
-			val rows = iter.toList
-			val tagIndex = tagIndexB.value
-			val commentIndex = commentIndexB.value
-			val (tag, nRows) = rulesWithAccsB.value.foldLeft((false, rows)){case ((tag, rows), (rule, acc)) => 
-				val (nextTag, nextRows) = rule.flag(rows, acc, schema, tagIndex, commentIndex)
-				(tag||nextTag, nextRows)
-			}
-			nRows.toIterator
-		})(encoder)
+		tagIndexB: Broadcast[Int], commentIndexB: Broadcast[Int]):String\/DataFrame = {
+		val requiredCols = rules.flatMap(_.requiredCols).distinct
+		if(requiredCols.forall(c => logs.columns.contains(c))){
+			val rulesWithAccsB = spark.sparkContext.broadcast(rules.map(r => (r, r.initAcc(spark))))
+			val res = logs.mapPartitions(iter => {
+				val rows = iter.toList
+				val tagIndex = tagIndexB.value
+				val commentIndex = commentIndexB.value
+				val (tag, nRows) = rulesWithAccsB.value.foldLeft((false, rows)){case ((tag, rows), (rule, acc)) => 
+					val (nextTag, nextRows) = rule.flag(rows, acc, schema, tagIndex, commentIndex)
+					(tag||nextTag, nextRows)
+				//TODO (or maybe impossible) : use an accumulator to count the number of anomalies using
+				//the boolean 'tag'. In this version (2.2), it seems impossible to update inside mapPartitions
+				// an accumulator created by the driver.
+				}
+				nRows.toIterator
+			})(encoder)
+			res.right
+		}else{
+			val missing = requiredCols.filter(c => !logs.columns.contains(c))
+			val msg = "Cannot apply rules because the following column(s) need(s) to be present: "+missing.mkString(",")
+			msg.left
+		}
 	}
 }

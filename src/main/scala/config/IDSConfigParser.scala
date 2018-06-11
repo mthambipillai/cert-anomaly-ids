@@ -8,54 +8,22 @@
 package config
 import java.io.File
 import com.typesafe.config.ConfigFactory
-import features.Feature
 import features.FeaturesParser
 import scala.concurrent.duration._
-import inspection.Rule
 import inspection.RulesParser
-import evaluation.IntrusionKind
 import evaluation.IntrusionsParser
+import org.apache.spark.sql.SparkSession
 import scala.util.Try
 import scalaz._
 import Scalaz._
 
-case class IDSConfig(
-	//Global parameters
-	val mode: String,
-	val logLevel: String,
-	val filePath: String,
-	val featuresschema: List[Feature],
-	val extractor: String,
-	val interval: Duration,
-	val trafficMode: String,
-	val scaleMode: String,
-	val ensembleMode: String,
-	val featuresFile: String,
-	val featuresStatsFile : String,
-	val detectors: String,
-	val threshold: Double,
-	val topAnomalies: Int,
-	val anomaliesFile: String,
-	val rules: List[Rule],
-	val inspectionResults: String,
-	val recall: Boolean,
-	val intrusions: List[(IntrusionKind,Int)],
-	val intrusionsDir: String,
-	//IsolationForest parameters
-	val isolationForest: IsolationForestConfig,
-	//KMeans parameters
-	val kMeans: KMeansConfig,
-	//Local Outlier Factor parameters
-	val lof: LOFConfig
-)
-
-object IDSConfig{
+class IDSConfigParser(spark: SparkSession){
 	val parser = new scopt.OptionParser[IDSConfig]("cert-anomaly-ids") {
 		head("CERT-Anomaly-IDS", "1.0")
 		opt[String]("extractor").action( (x, c) =>
 			c.copy(extractor = x) ).text("Type of entity extractor. Default is hostsWithIpFallback")
 		opt[String]("featuresschema").action( (x, c) =>
-			c.copy(featuresschema = new FeaturesParser(null).parse(x).getOrElse(Nil)) ).text("Source of features.")
+			c.copy(featuresschema = new FeaturesParser(spark).parse(x).getOrElse(null)) ).text("Source of features.")
 		opt[Duration]("interval").action( (x, c) =>
 			c.copy(interval = x) ).text("Interval for aggregation per src/dst entity in Scala Duration format. Default is '60 min'.")
 		opt[String]("loglevel").action( (x, c) =>
@@ -78,7 +46,7 @@ object IDSConfig{
 			opt[Boolean]('r', "recall").action( (x, c) =>
 				c.copy(recall = x) ).text("True if intrusions should be injected to compute recall."),
 			opt[String]('i', "intrusions").action( (x, c) =>
-				c.copy(intrusions = IntrusionsParser.parse(x).getOrElse(Nil)) ).text("Source of intrusions."),
+				c.copy(intrusions = IntrusionsParser.parse(x).getOrElse(null)) ).text("Source of intrusions."),
 			opt[String]('d', "intrusionsdir").action( (x, c) =>
 				c.copy(intrusionsDir = x) ).text("Folder to write the injected intrusions to.")
 		)
@@ -111,7 +79,7 @@ object IDSConfig{
 			opt[String]('a', "anomaliesfile").action( (x, c) =>
 				c.copy(anomaliesFile = x) ).text("CSV file to read the detected anomalies from."),
 			opt[String]('r', "rules").action( (x, c) =>
-				c.copy(rules = RulesParser.parse(x).getOrElse(Nil)) ).text("Source of rules."),
+				c.copy(rules = RulesParser.parse(x).getOrElse(null)) ).text("Source of rules."),
 			opt[String]('i', "inspectionfiles").action( (x, c) =>
 				c.copy(inspectionResults = x) ).text("CSV files to write the results of the inspection to."),
 			opt[String]('d', "intrusionsdir").action( (x, c) =>
@@ -123,17 +91,19 @@ object IDSConfig{
 	Returns an IDSConfig first parsed from 'confFile' and then overriden with the command
 	line arguments 'args'.
 	*/
-	def loadConf(args: Array[String], confFile: String):String\/IDSConfig = {
+	def loadConf(args: Array[String], appLoaderFile: String):String\/IDSConfig = {
 		for{
-			configTemp <- Try(ConfigFactory.parseFile(new File(confFile))).toDisjunction.leftMap(e =>
-				"Could not parse '"+confFile+"' because of "+e.getMessage)
-			config = configTemp.resolve()
+			appLoader <- Try(ConfigFactory.parseFile(new File(appLoaderFile))).toDisjunction.leftMap(e =>
+				"Could not parse '"+appLoaderFile+"' because of "+e.getMessage).map(_.resolve())
+			confFile <- tryGet(appLoader.getString)("configpath")
+			config <- Try(ConfigFactory.parseFile(new File(confFile))).toDisjunction.leftMap(e =>
+				"Could not parse '"+confFile+"' because of "+e.getMessage).map(_.resolve())
 			filePath <- tryGet(config.getString)("logspath")
 			logLevel <- tryGet(config.getString)("loglevel")
 			featuresschema <- tryGet(config.getString)("featuresschema").flatMap(f => 
-				new FeaturesParser(null).parse(f))
+				new FeaturesParser(spark).parse(f))
 			extractor <- tryGet(config.getString)("extractor")
-			interval <- tryGet(config.getString)("aggregationtime").flatMap(i =>
+			interval <- tryGet(config.getString)("interval").flatMap(i =>
 				Try(Duration(i)).toDisjunction.leftMap(e => "Could not parse duration because of "+e.getMessage))
 			trafficMode <- tryGet(config.getString)("trafficmode")
 			scaleMode <- tryGet(config.getString)("scalemode")
@@ -158,9 +128,9 @@ object IDSConfig{
 				ensembleMode, featuresFile, featuresStatsFile, detectors, threshold, topAnomalies, anomaliesFile,
 				rules, inspectionResults, recall, intrusions, intrusionsDir, isolationForest, kMeans, lof)
 			res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
-			checkFeatures <- if(res.featuresschema.isEmpty) "Could not parse features.".left else res.right
-			checkRules <- if(checkFeatures.rules.isEmpty) "Could not parse rules.".left else checkFeatures.right
-			checkIntrusions <- if(checkRules.intrusions.isEmpty) "Could not parse intrusions.".left else checkRules.right
+			checkFeatures <- if(res.featuresschema == null) "Could not parse features.".left else res.right
+			checkRules <- if(checkFeatures.rules == null) "Could not parse rules.".left else checkFeatures.right
+			checkIntrusions <- if(checkRules.intrusions == null) "Could not parse intrusions.".left else checkRules.right
 		}yield checkIntrusions
 	}
 

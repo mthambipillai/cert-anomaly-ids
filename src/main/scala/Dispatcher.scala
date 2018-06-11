@@ -31,14 +31,18 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 	}
 
 	private def handleExtract():String\/Unit = {
-		def inject(min: Long, max: Long, df: DataFrame): String\/DataFrame = {
+		def inject(df: DataFrame): String\/DataFrame = {
 			if(conf.recall){
 				val eval = new Evaluator(spark)
-				eval.injectIntrusions(df, conf.intrusions, min, max, conf.interval, conf.intrusionsDir)
+				eval.injectIntrusions(df, conf.intrusions, conf.interval, conf.intrusionsDir)
 			}else{
 				df.right
 			}
 		}
+
+		/*val test = new TestExtractor(spark, inject)
+		test.extractFeaturesStep1(conf.filePath, conf.featuresschema, conf.extractor, conf.interval,
+			conf.trafficMode, conf.scaleMode, conf.featuresFile)*/
 		val fe = new FeatureExtractor(spark, inject)
 		for(
 			finalFeatures <- fe.extractFeatures(conf.filePath, conf.featuresschema, conf.extractor, conf.interval,
@@ -69,7 +73,8 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 			(realLogs, injectedLogs) <- ins.getAllLogs(conf.filePath, conf.featuresschema, conf.extractor,
 				conf.anomaliesFile, conf.trafficMode, conf.interval, conf.recall, conf.intrusionsDir)
 			_ <- if(conf.recall) eval.evaluateIntrusions(injectedLogs, conf.intrusionsDir) else "".right
+			res <- ins.inspectLogs(realLogs, conf.rules, conf.inspectionResults)
 
-		}yield ins.inspectLogs(realLogs, conf.rules, conf.inspectionResults)
+		}yield res
 	}
 }

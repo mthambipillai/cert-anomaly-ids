@@ -20,7 +20,7 @@ object MainIDSApp {
 		spark.sparkContext.register(Signer.acc, "signerAccumulator")
 		val idsHome = scala.util.Properties.envOrElse("CERT_ANOMALY_IDS_HOME", ".")
 		val finalRes = for{
-			conf <- IDSConfig.loadConf(args, idsHome+"/conf/application.conf")
+			conf <- new IDSConfigParser(spark).loadConf(args, idsHome+"/conf/application_loader.conf")
 			status = Try(spark.sparkContext.setLogLevel(conf.logLevel)).toDisjunction.leftMap(e =>
 				"Unknown log level '"+conf.logLevel+"'")
 			res <- if(status.isRight) new Dispatcher(spark, conf).dispatch(conf.mode) else status

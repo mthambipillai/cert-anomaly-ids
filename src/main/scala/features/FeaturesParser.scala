@@ -7,6 +7,7 @@
 */
 package features
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.SparkSession
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
@@ -15,8 +16,7 @@ import scala.util.Try
 import scalaz._
 import Scalaz._
 
-object FeaturesParser{
-
+class FeaturesParser(spark: SparkSession) extends Serializable{
 	def parse(fileName: String):String\/List[Feature] = {
 		for{
 			json <- Try(scala.io.Source.fromFile(fileName)).toDisjunction.leftMap(e => e.getMessage)
@@ -29,7 +29,7 @@ object FeaturesParser{
 				val name = f("name").asInstanceOf[String]
 				val parent = getParent(f("parent").asInstanceOf[String])
 				for{
-					parser <- getParseFunction(f("type").asInstanceOf[String])
+					parser <- getParseFunction(name, f("type").asInstanceOf[String])
 					doc = f("doc").asInstanceOf[String]
 					aggs = f("aggs").asInstanceOf[List[String]]
 					aggsF <- aggs.traverseU(getAggFunction)
@@ -38,14 +38,17 @@ object FeaturesParser{
 		}yield res
 	}
 
-	private def getParseFunction(fType: String):String\/((DataFrame,String) => DataFrame) = fType match {
+	private def getParseFunction(name: String, fType: String):String\/((DataFrame,String) => DataFrame) = fType match {
 		case "Boolean" => (Feature.parseBooleanCol _).right
 		case "Int" => (Feature.parseIntCol _).right
-		case "String" => (Feature.parseStringCol _).right
+		case "Double" => (Feature.parseDoubleCol _).right
+		case "String" => (Feature.parseStringCol(spark) _).right
 		case "Long" => (Feature.parseLongCol _).right
-		case "Host" => (Feature.parseHostCol _).right
+		case "Host" => (Feature.parseHostCol(spark) _).right
 		case "Day" => (Feature.parseDayCol _).right
 		case "Hour" => (Feature.parseHourCol _).right
+		case "Length" => (Feature.parseLengthCol(name) _).right
+		case "Head" => (Feature.parseHeadCol(spark,name) _).right
 		case t => ("Unknown type '"+t+"' for parsing feature.").left
 	}
 

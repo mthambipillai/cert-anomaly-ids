@@ -55,7 +55,7 @@ class Ensembler(){
 		val scoreCol = newCols.filter(_.contains("score")).head
 		val top = distDetected.sort(desc(scoreCol)).limit(nbTop).select(newCols.head, newCols.tail:_*)
 		println("Writing top "+nbTop+" intrusions detected to "+destFile+".")
-		top.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv")
+		top.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv")
 		.option("header", "true").save(destFile)
 	}
 

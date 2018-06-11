@@ -23,7 +23,7 @@ import Scalaz._
 Contains methods to extract features from logs, parse them, aggregate them and
 scale them. More details about features extraction can be found in the wiki.
 */
-class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFrame) extends Serializable{
+class TestExtractor(spark: SparkSession, inject: (Long,Long,DataFrame) => String\/DataFrame) extends Serializable{
 
 	/*
 	Returns a DataFrame from the file 'filePath' with all the basic features defined by 'features'
@@ -33,19 +33,21 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 	they can be used for machine learning.
 	*/
 	def extractRawBasicFeatures(filePath: String, features: List[Feature],
-		extractor: String = "hostsWithIpFallback", eType: String): String\/(DataFrame,List[Feature]) = {
-		println("Begin to extract basic features from "+filePath+"...")
+		extractor: String, eType: String): String\/(DataFrame,List[Feature]) = {
+		println("Begin to extract basic features...")
 		for{
 			logFile <- Try(spark.read.parquet(filePath)).toDisjunction.leftMap(e =>
 				"Could not read '"+filePath+"' because of "+e.getMessage)
-			_ = println(logFile.count)
 			_ = logFile.createOrReplaceTempView("logfiles")
 			sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles"
 			df <- Try(spark.sql(sqlStmt)).toDisjunction.leftMap(e =>
 				"Could not execute statement '"+sqlStmt+"' because of "+e.getMessage)
-			dfInjected <- inject(df)
+			//minMax = df.agg(min("timestamp"),max("timestamp")).head
+			//minTime = minMax.getLong(0)
+			//maxTime = minMax.getLong(1)
+			//dfInjected <- inject(minTime, maxTime, df)
 			ee = EntityExtractor.getByName(spark, extractor)
-			(df2,newFeatures) <- ee.extract(dfInjected, features, eType)
+			(df2,newFeatures) <- ee.extract(df, features, eType)
 		}yield{
 			val res = newFeatures.map(f => f.parseCol(_)).foldLeft(df2){ (previousdf, parser) => parser(previousdf) }
 			(res, newFeatures)
@@ -58,61 +60,35 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 	processed before they can be used for machine learning.
 	*/
 	def extractRawTrafficFeatures(df: DataFrame, features: List[Feature], interval: Duration,
-		eType: String): DataFrame = {
+		eType: String, featuresPath: String): Unit = {
 		println("Begin to extract traffic features...")
 		val minMax = df.agg(min("timestamp"),max("timestamp")).head
 		val minTime = minMax.getDouble(0)
 		val maxTime = minMax.getDouble(1)
 		val nbIntervals = (((maxTime-minTime)/interval.toMillis)+1).toInt
 		val aggs = features.flatMap(_.aggregate())
-		val newNbPartitions = df.rdd.getNumPartitions * nbIntervals
 		val splits = (1 to nbIntervals).map(i => {
-			val lowB = spark.sparkContext.broadcast(minTime.toDouble + (i-1)*interval.toMillis)
+			val lowB = spark.sparkContext.broadcast(minTime + (i-1)*interval.toMillis)
 			val highB = spark.sparkContext.broadcast(lowB.value + interval.toMillis)
-			val subdf = df.filter(col("timestamp") >= lowB.value && col("timestamp") < highB.value)
-				.repartition(newNbPartitions)
-			val aggdf = aggregate(subdf, eType, aggs)
-			aggdf.withColumn("timeinterval",lit(lowB.value))
+			(i, df.filter(col("timestamp") >= lowB.value).filter(col("timestamp") < highB.value))
+			//val aggdf = aggregate(subdf, eType, aggs)
+			//aggdf.withColumn("timeinterval",lit(lowB.value))
 		})
-		splits.tail.foldLeft(splits.head){case (df1, df2) => df1.union(df2)}
+		splits.foreach{case (i,df) =>
+			df.write.mode(SaveMode.Overwrite).parquet(featuresPath+"split"+i+".parquet")
+		}
+	}
+
+	def extractFeaturesStep1(filePath: String, features: List[Feature], extractor: String, interval: Duration,
+		trafficMode: String, scaleMode: String, featuresPath: String): String\/Unit = {
+		val entity = trafficMode+"entity"
+		for{
+			(basic, newFeatures) <- extractRawBasicFeatures(filePath, features, extractor, entity)
+		}yield extractRawTrafficFeatures(basic, newFeatures, interval, entity, featuresPath)
 	}
 
 	private def aggregate(df: DataFrame, eType: String, aggs: List[Column]): DataFrame = {
 		df.groupBy(eType, eType+"Index").agg(aggs.head, aggs.tail:_*)
-	}
-
-	/*
-	Returns a DataFrame representing the traffic features from the basic features in 'df' : aggregation over
-	each interval of size 'interval' per src or dst entity defined by 'eType'. They need to be further
-	processed before they can be used for machine learning.
-	*/
-	def extractRawTrafficFeatures2(df: DataFrame, features: List[Feature], interval: Duration,
-		eType: String): DataFrame = {
-		println("Begin to extract traffic features...")
-		val aggs = features.flatMap(_.aggregate())
-		val df2 = withBeginTimeInterval(df, interval)
-		aggregate2(df2, eType, aggs)
-	}
-
-	private def aggregate2(df: DataFrame, eType: String, aggs: List[Column]): DataFrame = {
-		df.groupBy(eType, eType+"Index", "timeinterval").agg(aggs.head, aggs.tail:_*)
-	}
-
-	private def withBeginTimeInterval(df: DataFrame, interval: Duration):DataFrame = {
-		val timestampIndex = df.columns.indexOf("timestamp")
-		val timestampIndexB = spark.sparkContext.broadcast(timestampIndex)
-		val intervalB = spark.sparkContext.broadcast(interval.toMillis)
-		val newSchema = df.schema.add(StructField("timeinterval", DoubleType, true))
-		val encoder = RowEncoder(newSchema)
-		df.mapPartitions(iter => {
-			val timestampIndex = timestampIndexB.value
-			val interval = intervalB.value
-			iter.map(r => {
-				val timestamp = r.getDouble(timestampIndex)
-				val beginInterval = scala.math.floor(timestamp / interval) * interval
-				Row.fromSeq(r.toSeq :+ beginInterval.toDouble)
-			})
-		})(encoder)
 	}
 
 	/*
@@ -134,9 +110,8 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 	*/
 	private def normalizeToUnit(df: DataFrame, eType: String): DataFrame = {
 		val schemaB = spark.sparkContext.broadcast(df.dtypes.zipWithIndex.map{case ((colName, colType),index) => 
-			(colName, colType, index)}.filter(_._1!=eType).toSeq)
+			(colName, colType, index)}.filter(_._1!=eType))
 		val eTypeIndexB = spark.sparkContext.broadcast(df.columns.indexOf(eType))
-		val timeIntervalIndexB = spark.sparkContext.broadcast(df.columns.indexOf("timeinterval"))
 		val entityField = StructField(eType, StringType, true)
 		val timeField = StructField("timeinterval", DoubleType, true)
 		val newSchema = StructType(Seq(entityField, timeField)++schemaB.value.map(sf => 
@@ -145,24 +120,22 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 		df.mapPartitions(iter => {
 			val schema = schemaB.value
 			val eTypeIndex = eTypeIndexB.value
-			val timeIntervalIndex = timeIntervalIndexB.value
-			iter.map(r => normalizeRowToUnit(r, schema, eTypeIndex, timeIntervalIndex))
+			iter.map(r => normalizeRowToUnit(r, schema, eTypeIndex))
 		})(encoder)
 	}
 
-	private def normalizeRowToUnit(row: Row, schema: Seq[(String, String, Int)], eTypeIndex: Int,
-		timeIntervalIndex: Int): Row = {
+	private def normalizeRowToUnit(row: Row, schema: Array[(String, String, Int)], eTypeIndex: Int): Row = {
 		val values = schema.map{case (colName, colType, index) =>
 			colType match{
 				case "LongType" => row.getLong(index).toDouble
 				case "DoubleType" => row.getDouble(index)
 			}
 		}
-		val norm = scala.math.sqrt(values.foldLeft(0.0){case (sum,v) => sum + (v*v)})
+		val norm = scala.math.sqrt(values.map(v => v*v).sum)
 		val scaled = values.map(_/norm)
 		val entity = row.getString(eTypeIndex)
-		val t = row.getDouble(timeIntervalIndex)
-		Row.fromSeq(Seq(entity, t) ++ scaled)
+		val t = row.getDouble(row.fieldIndex("timeinterval"))
+		Row.fromSeq(Seq(entity, t) ++ scaled.toSeq)
 	}
 
 	/*
@@ -220,25 +193,20 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 		Row.fromSeq(newSeq)
 	}
 
-	/*
-	*Returns a DataFrame of final features ready for unsupervised machine learning to be applied.
-	*@param filePath  source of the DataFrame.
-	*@param features  list of features to parse, aggregate and normalize.
-	*@param extractor  defines the entity extractor to use.
-	*@param interval  time window of the aggregation.
-	*@param trafficMode  defines whether the logs are grouped by "src" or "dst".
-	*@param scaleMode  defines the feature scaling technique to use.
-	*/
-	def extractFeatures(filePath: String, features: List[Feature], extractor: String, interval: Duration,
-		trafficMode: String, scaleMode: String): String\/DataFrame = {
+	/*def extractFeaturesStep2(nbIntervals: Int, featuresPath: String, trafficMode:String, features: List[Feature],
+		scaleMode: String, finalFileName: String, statsFileName: String): String\/Unit = {
 		val entity = trafficMode+"entity"
+		val aggs = features.flatMap(_.aggregate())
+		val splits = (1 to nbIntervals).map(i => {
+			val split = spark.read.parquet(featuresPath+"split"+i+".parquet")
+			val aggdf = aggregate(split, entity, aggs)
+			aggdf.withColumn("timeinterval",lit(lowB.value))
+		})
+		val traffic = splits.tail.foldLeft(splits.head){case (df1, df2) => df1.union(df2)}
 		for{
-			(basic, newFeatures) <- extractRawBasicFeatures(
-				filePath, features, extractor, entity)
-			traffic = extractRawTrafficFeatures(basic, newFeatures, interval, entity)
 			res <- getFinalFeaturesAsColumns(traffic, scaleMode, entity)
-		}yield res
-	}
+		}yield writeFeaturesToFile(res, finalFileName, statsFileName)
+	}*/
 
 	def writeFeaturesToFile(features: DataFrame, fileName: String, statsFileName: String):Unit = {
 		println("Writing features to "+fileName+".parquet...")
@@ -253,10 +221,5 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 		val toRemove = " ()".toSet
 		val newCol = col.filterNot(toRemove)
 		df.withColumnRenamed(col, newCol)
-	}
-
-	private def frequentValues(df: DataFrame): Unit = {
-		df.columns.foreach(f => df.groupBy(f).count().orderBy(desc("count")).show())
-		df.columns.foreach(f => df.groupBy(f).count().orderBy(asc("count")).show())
 	}
 }

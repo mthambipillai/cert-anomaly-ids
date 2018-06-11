@@ -69,7 +69,7 @@ object RulesParser{
 		}
 		case "ssh_total_auth_attempts" => {
 			val totalNbAttempts = params.head.toInt
-			ComplexRule(name, (schema, rows, acc) => {
+			ComplexRule(name, List("auth_attempts"), (schema, rows, acc) => {
 				val index = schema.fieldIndex("auth_attempts")
 				val comments = rows.map{ r =>
 					val nbAttempts = if(r.isNullAt(index)) 0 else r.getInt(index)

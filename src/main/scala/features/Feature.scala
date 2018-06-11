@@ -7,9 +7,9 @@
 */
 package features
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.Column
-import org.apache.spark.ml.feature.StringIndexer
 import java.util.Date
 import java.text.SimpleDateFormat
 import java.util.Calendar;  
@@ -31,7 +31,10 @@ case class Feature(
 	/*
 	Parses the column 'name' of 'df' to an appropriate type (int or double).
 	*/
-	def parseCol(df: DataFrame):DataFrame = parseColAux(df,name)
+	def parseCol(df: DataFrame):DataFrame = parent match{
+		case Some(p) => parseColAux(df,p)
+		case None => parseColAux(df,name)
+	}
 
 	def aggregate(): List[Column] = aggregateAux.map(f => f(name))
 }
@@ -71,6 +74,13 @@ object Feature{
 		filled.withColumn(columnName+"2", intToDouble(filled(columnName))).drop(columnName).withColumnRenamed(columnName+"2",columnName)
 	}
 
+	/*
+	Fills the column 'null' values with 0.0.
+	*/
+	def parseDoubleCol(df: DataFrame, columnName: String): DataFrame = {
+		df.na.fill(0.0, columnName :: Nil)
+	}
+
 	private val longToDouble = udf((x: Long) => x.toDouble)
 	/*
 	Fills the column 'null' values with 0L and converts to Double.
@@ -100,30 +110,35 @@ object Feature{
 	/*
 	Converts a column of categorical string values to integers.
 	*/
-	def parseStringCol(df: DataFrame, columnName: String): DataFrame = {
-		val indexer = new StringIndexer().setInputCol(columnName).setOutputCol(columnName+"2").setHandleInvalid("keep")
+	def parseStringCol(spark: SparkSession)(df: DataFrame, columnName: String): DataFrame = {
+		val indexer = new HashStringIndexer(spark, columnName, columnName+"2")
 		val df2 = df.na.fill("NULLFEATUREVALUE", columnName :: Nil)
-		indexer.fit(df2).transform(df2).drop(columnName).withColumnRenamed(columnName+"2",columnName)
+		indexer.transform(df2).drop(columnName).withColumnRenamed(columnName+"2",columnName)
 	}
 
 	/*
 	Converts a column of src/dst host string values to integers. This is not the same as parsing simple
 	string values because "null" and "NOT_RESOLVED" are actually the same so first they must be mapped to the same string.
 	*/
-	def parseHostCol(df: DataFrame, columnName: String): DataFrame = {
+	def parseHostCol(spark: SparkSession)(df: DataFrame, columnName: String): DataFrame = {
 		val df2 = df.na.fill("NOT_RESOLVED", columnName :: Nil)
-		val indexer = new StringIndexer().setInputCol(columnName).setOutputCol(columnName+"2").setHandleInvalid("keep")
-		indexer.fit(df2).transform(df2).drop(columnName).withColumnRenamed(columnName+"2",columnName)
+		val indexer = new HashStringIndexer(spark, columnName, columnName+"2")
+		indexer.transform(df2).drop(columnName).withColumnRenamed(columnName+"2",columnName)
 	}
 
 	/*
 	Converts a column of src/dst entities string values to integers. This is not the same as parsing simple
 	string values because we need to keep the previous column.
 	*/
-	def parseEntityCol(df: DataFrame, columnName: String): DataFrame = {
+	def parseEntityCol(spark: SparkSession)(df: DataFrame, columnName: String): DataFrame = {
 		val df2 = df.na.fill("NOT_RESOLVED", columnName :: Nil)
-		val indexer = new StringIndexer().setInputCol(columnName).setOutputCol(columnName+"Index").setHandleInvalid("keep")
-		indexer.fit(df2).transform(df2)
+		val indexer = new HashStringIndexer(spark, columnName, columnName+"Index")
+		indexer.transform(df2)
+	}
+
+	def parseIntEntityCol(df: DataFrame, columnName: String): DataFrame = {
+		val filled = df.na.fill(0, columnName :: Nil)
+		filled.withColumn(columnName+"Index", intToDouble(filled(columnName)))
 	}
 
 	private val hourFormatter = new SimpleDateFormat("HH")
@@ -132,7 +147,7 @@ object Feature{
 	Converts a column of timestamps in milliseconds as Longs to hours of the day as Doubles.
 	*/
 	def parseHourCol(df: DataFrame, columnName: String): DataFrame = {
-		df.withColumn("hour", toHour(hourFormatter)(df("timestamp")))
+		df.withColumn("hour", toHour(hourFormatter)(df(columnName)))
 	}
 
 	private val cal = Calendar.getInstance(TimeZone.getDefault())
@@ -144,6 +159,19 @@ object Feature{
 	Converts a column of timestamps in milliseconds as Longs to day of the week as Doubles.
 	*/
 	def parseDayCol(df: DataFrame, columnName: String): DataFrame = {
-		df.withColumn("day", toDay(cal)(df("timestamp")))
+		df.withColumn("day", toDay(cal)(df(columnName)))
+	}
+
+	private val lengthUDF = udf((x:String) => x.length.toDouble)
+	def parseLengthCol(newColName: String)(df: DataFrame, columnName: String): DataFrame = {
+		df.withColumn(newColName, lengthUDF(df(columnName)))
+	}
+
+	private val headUDF = udf((x:String) => x.split(" ")(0))
+	def parseHeadCol(spark: SparkSession, newColName: String)(df: DataFrame, columnName: String): DataFrame = {
+		val withHead = df.withColumn(newColName, headUDF(df(columnName)))
+		val indexer = new HashStringIndexer(spark, newColName, newColName+"2")
+		val df2 = withHead.na.fill("NULLFEATUREVALUE", newColName :: Nil)
+		indexer.transform(df2).drop(newColName).withColumnRenamed(newColName+"2",newColName)
 	}
 }

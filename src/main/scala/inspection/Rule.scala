@@ -16,6 +16,7 @@ A Rule defines a way to analyze logs of an anomaly and determine if they match s
 implies that the detected anomaly is a true positive. It has 2 subclasses : SimpleRule and ComplexRule.
 */
 abstract class Rule(
+	val requiredCols: List[String],
 	private val flagAux: (StructType, List[Row], Option[DoubleAccumulator]) => (Boolean, List[String])
 ) extends Serializable {
 	def initAcc(spark: SparkSession): Option[DoubleAccumulator]

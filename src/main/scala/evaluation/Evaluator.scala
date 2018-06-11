@@ -29,8 +29,11 @@ class Evaluator(spark: SparkSession) extends Serializable{
 	'intrusionKinds'. All intrusions should happend after 'minTimestamp', before 'maxTimestamp' and last
 	at most 'intrusionTime'. Intrusions will be persisted in 'directory'.
 	*/
-	def injectIntrusions(df: DataFrame, intrusionKinds: List[(IntrusionKind, Int)], minTimestamp: Long,
-		maxTimestamp: Long, intrusionTime: Duration, directory: String):String\/DataFrame = {
+	def injectIntrusions(df: DataFrame, intrusionKinds: List[(IntrusionKind, Int)], 
+		intrusionTime: Duration, directory: String):String\/DataFrame = {
+		val minMax = df.agg(min("timestamp"),max("timestamp")).head
+		val minTimestamp = minMax.getLong(0)
+		val maxTimestamp = minMax.getLong(1)
 		val maxBeginIntrusionTime = maxTimestamp - intrusionTime.toMillis
 		val allKinds = intrusionKinds.flatMap{case (intrusionKind, nbOccurences) =>
 			(1 to nbOccurences).map(i => intrusionKind)}

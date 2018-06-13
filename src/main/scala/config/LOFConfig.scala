@@ -20,10 +20,10 @@ object LOFConfig{
 
 	def load(conf: Config):String\/LOFConfig = {
 		for{
-			k <- IDSConfig.tryGet(conf.getInt)("k")
-			hashNbDigits <- IDSConfig.tryGet(conf.getInt)("hashnbdigits")
-			hashNbVects <- IDSConfig.tryGet(conf.getInt)("hashnbvects")
-			maxScore <- IDSConfig.tryGet(conf.getInt)("maxscore")
+			k <- IDSConfigParser.tryGet(conf.getInt)("k")
+			hashNbDigits <- IDSConfigParser.tryGet(conf.getInt)("hashnbdigits")
+			hashNbVects <- IDSConfigParser.tryGet(conf.getInt)("hashnbvects")
+			maxScore <- IDSConfigParser.tryGet(conf.getInt)("maxscore")
 		}yield LOFConfig(k, hashNbDigits, hashNbVects, maxScore)
 	}
 }

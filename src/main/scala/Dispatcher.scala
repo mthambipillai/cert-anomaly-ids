@@ -11,6 +11,7 @@ import org.apache.spark.sql.DataFrame
 import evaluation._
 import config._
 import inspection._
+import optimization._
 import detection.Ensembler
 import detection.Detector
 import scala.util.Try
@@ -27,6 +28,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 		case "extract" => handleExtract
 		case "detect" => handleDetect
 		case "inspect" => handleInspect
+		case "optimize" => handleOptimize
 		case _ => ("Invalid command '"+conf.mode+"'. Try --help for more information.").left
 	}
 
@@ -76,5 +78,17 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 			res <- ins.inspectLogs(realLogs, conf.rules, conf.inspectionResults)
 
 		}yield res
+	}
+
+	private def handleOptimize():String\/Unit = {
+		val featuresFile = conf.featuresFile+".parquet"
+		println("Reading features from "+featuresFile+"...")
+		for{
+			features <- Try(spark.read.parquet(featuresFile)).toDisjunction.leftMap(e =>
+				"Could not read '"+featuresFile+"' because of "+e.getMessage)
+			_ = features.cache()
+			opt = new OptimizerParser(spark, features, conf)
+			optimizers <- opt.getOptimizers(conf.detectorToOpt)
+		}yield optimizers.map(_.optimize())
 	}
 }

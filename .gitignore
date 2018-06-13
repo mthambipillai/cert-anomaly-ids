@@ -5,6 +5,7 @@ target/scala-2.11/*.jar
 target/scala-2.11/classes/*
 target/resolution-cache/*
 target/streams/*
+target/.history
 package/bin/*
 package/build/*
 package/profile.d/*

@@ -36,25 +36,10 @@ class Inspector(spark: SparkSession){
 	then printed and the tagged results are persisted to 'resultsFile'.
 	*/
 	def inspectLogs(allLogs: List[DataFrame], rules: List[Rule], resultsFile: String):String\/Unit = {
-		val nbCols = allLogs.head.columns.size
-		val tagIndexB = spark.sparkContext.broadcast(nbCols-2)
-		val commentIndexB = spark.sparkContext.broadcast(nbCols-1)
-		val newSchema = allLogs.head.schema
-		val encoder = RowEncoder(newSchema)
-		println("Inspecting logs...")
-		for{
-			dfs <- allLogs.traverseU(df =>
-				flag(df, rules, newSchema, encoder, tagIndexB, commentIndexB))
-		}yield{
+		flagLogs(allLogs, rules).map(dfs => {
 			printPrecision(dfs, resultsFile)
-
-			println("Writing results to "+resultsFile+"...")
-			dfs.zipWithIndex.map{case (df,i) =>
-				df.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv")
-					.option("header", "true")
-					.option("delimiter", "\t")
-					.save(resultsFile+"/anomaly"+i)}
-		}
+			persistResults(dfs, resultsFile)
+		})
 	}
 
 	/*
@@ -78,7 +63,7 @@ class Inspector(spark: SparkSession){
 			tempLogFile <- Try(spark.read.parquet(filePath)).toDisjunction.leftMap(e =>
 				"Could not read '"+filePath+"' because of "+e.getMessage)
 			_ = tempLogFile.createOrReplaceTempView("temp")
-			logFile = spark.sql("SELECT "+featuresString+" FROM temp")
+			logFile = spark.sql(s"SELECT $featuresString FROM temp")
 			_ = logFile.createOrReplaceTempView("logfiles")
 			_ <- if(recall) registerIntrusionsLogs(intrusionsDir, featuresNames) else Unit.right
 			(realAnoms, injectedAnoms) <- loadAnoms(anomaliesFile, recall)
@@ -95,6 +80,25 @@ class Inspector(spark: SparkSession){
 				}
 			}
 		}yield (allLogs, if(recall) getInjectedLogs(injectedAnoms, interval) else Nil)
+	}
+
+	def flagLogs(allLogs: List[DataFrame], rules: List[Rule]):String\/List[DataFrame]={
+		val nbCols = allLogs.head.columns.size
+		val tagIndexB = spark.sparkContext.broadcast(nbCols-2)
+		val commentIndexB = spark.sparkContext.broadcast(nbCols-1)
+		val newSchema = allLogs.head.schema
+		val encoder = RowEncoder(newSchema)
+		println("Inspecting logs...")
+		allLogs.traverseU(df => flag(df, rules, newSchema, encoder, tagIndexB, commentIndexB))
+	}
+
+	private def persistResults(taggedLogs: List[DataFrame], resultsFile: String):Unit = {
+		println("Writing results to "+resultsFile+"...")
+		taggedLogs.zipWithIndex.map{case (df,i) =>
+			df.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv")
+				.option("header", "true")
+				.option("delimiter", "\t")
+				.save(resultsFile+"/anomaly"+i)}
 	}
 
 	private def registerIntrusionsLogs(intrusionsDir: String, featuresNames: List[String]):String\/Unit = {
@@ -116,6 +120,15 @@ class Inspector(spark: SparkSession){
 		})
 	}
 
+	def getPrecision(dfs: List[DataFrame]):Double = {
+		val anomalyTagIndex = dfs.head.columns.size - 2
+		val nbPositives = dfs.map(df =>
+			df.head.getString(anomalyTagIndex)).filter(t => t=="yes").size
+		val nbAll = dfs.size
+		val nbNegatives = nbAll - nbPositives
+		(nbPositives.toDouble/nbAll.toDouble)*100.0
+	}
+
 	/*
 	Filter the logs 'all' to count the ones that were flagged as anomalies, then compute
 	precision using 'nbAll' and print it.
@@ -124,7 +137,6 @@ class Inspector(spark: SparkSession){
 		val anomalyTagIndex = dfs.head.columns.size - 2
 		val nbPositives = dfs.map(df =>
 			df.head.getString(anomalyTagIndex)).filter(t => t=="yes").size
-		//val nbPositives = all.filter(col("anomalytag")===lit("yes")).count.toInt
 		val nbAll = dfs.size
 		val nbNegatives = nbAll - nbPositives
 		val precision = (nbPositives.toDouble/nbAll.toDouble)*100.0

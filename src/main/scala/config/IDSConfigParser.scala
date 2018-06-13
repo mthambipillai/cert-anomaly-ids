@@ -85,6 +85,27 @@ class IDSConfigParser(spark: SparkSession){
 			opt[String]('d', "intrusionsdir").action( (x, c) =>
 				c.copy(intrusionsDir = x) ).text("Folder to read the injected intrusions from.")
 		)
+		cmd("optimize").action( (_, c) => c.copy(mode = "optimize") ).
+		text("Inspects all the logs for every anomaly detected.").
+		children(
+			opt[String]('d', "detectoropt").action( (x, c) =>
+				c.copy(anomaliesFile = x) ).text("Detector to optimize."),
+			opt[String]('f', "featuresfile").action( (x, c) =>
+				c.copy(featuresFile = x) ).text("Parquet file to read the scaled features from."),
+			opt[String]('s', "featuresstatsfile").action( (x, c) =>
+				c.copy(featuresStatsFile = x) ).text("Parquet file to read the features' statistics from."),
+			opt[Double]('t', "threshold").action( (x, c) =>
+				c.copy(threshold = x) )
+			.text("Threshold between 0.0 and 1.0 above which logs are considered as anomalies.").validate( x => {
+				if(x>=0.0 && x<=1.0) success else failure("Value must be between 0.0 and 1.0.")
+			}),
+			opt[Int]('n', "nbtopanomalies").action( (x, c) =>
+				c.copy(topAnomalies = x) ).text("Number of top anomalies to store.").validate( x => {
+					if(x>0 && x<=1000) success else failure("Value must be between 1 and 1000.")
+			}),
+			opt[String]('r', "rules").action( (x, c) =>
+				c.copy(rules = RulesParser.parse(x).getOrElse(Nil)) ).text("Source of rules.")
+		)
 	}
 
 	/*
@@ -120,13 +141,14 @@ class IDSConfigParser(spark: SparkSession){
 			recall <- tryGet(config.getBoolean)("recall")
 			intrusions <- tryGet(config.getString)("intrusions").flatMap(i => IntrusionsParser.parse(i)) 
 			intrusionsDir <- tryGet(config.getString)("intrusionsdir")
+			detectorToOpt <- tryGet(config.getString)("detectoropt")
 			isolationForest <- IsolationForestConfig.load(config)
 			kMeans <- KMeansConfig.load(config)
 			lof <- LOFConfig.load(config)
 
 			fromFile = IDSConfig("", logLevel, filePath, featuresschema, extractor, interval, trafficMode, scaleMode,
 				ensembleMode, featuresFile, featuresStatsFile, detectors, threshold, topAnomalies, anomaliesFile,
-				rules, inspectionResults, recall, intrusions, intrusionsDir, isolationForest, kMeans, lof)
+				rules, inspectionResults, recall, intrusions, intrusionsDir, detectorToOpt, isolationForest, kMeans, lof)
 			res <- parser.parse(args, fromFile).toRightDisjunction("Unable to parse cli arguments.")
 			checkFeatures <- if(res.featuresschema == null) "Could not parse features.".left else res.right
 			checkRules <- if(checkFeatures.rules == null) "Could not parse rules.".left else checkFeatures.right
@@ -134,6 +156,10 @@ class IDSConfigParser(spark: SparkSession){
 		}yield checkIntrusions
 	}
 
+	def tryGet[T](get: String => T)(paramName: String):String\/T = IDSConfigParser.tryGet(get)(paramName)
+}
+
+object IDSConfigParser{
 	def tryGet[T](get: String => T)(paramName: String):String\/T = {
 		Try(get(paramName)).toDisjunction.leftMap(e => e.getMessage)
 	}

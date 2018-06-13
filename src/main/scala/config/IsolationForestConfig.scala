@@ -18,8 +18,8 @@ object IsolationForestConfig{
 
 	def load(conf: Config):String\/IsolationForestConfig = {
 		for{
-			nbTrees <- IDSConfig.tryGet(conf.getInt)("nbtrees")
-			nbSamples <- IDSConfig.tryGet(conf.getInt)("nbsamples")
+			nbTrees <- IDSConfigParser.tryGet(conf.getInt)("nbtrees")
+			nbSamples <- IDSConfigParser.tryGet(conf.getInt)("nbsamples")
 		}yield IsolationForestConfig(nbTrees, nbSamples)
 	}
 }

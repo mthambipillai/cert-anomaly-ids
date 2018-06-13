@@ -23,13 +23,13 @@ object KMeansConfig{
 
 	def load(conf: Config):String\/KMeansConfig = {
 		for{
-			trainRatio <- IDSConfig.tryGet(conf.getDouble)("trainratio")
-			minNbK <- IDSConfig.tryGet(conf.getInt)("minnbk")
-			maxNbK <- IDSConfig.tryGet(conf.getInt)("maxnbk")
-			elbowRatio <- IDSConfig.tryGet(conf.getDouble)("elbowratio")
-			nbK <- IDSConfig.tryGet(conf.getInt)("nbk")
-			lowBound <- IDSConfig.tryGet(conf.getLong)("lowbound")
-			upBound <- IDSConfig.tryGet(conf.getLong)("upbound")
+			trainRatio <- IDSConfigParser.tryGet(conf.getDouble)("trainratio")
+			minNbK <- IDSConfigParser.tryGet(conf.getInt)("minnbk")
+			maxNbK <- IDSConfigParser.tryGet(conf.getInt)("maxnbk")
+			elbowRatio <- IDSConfigParser.tryGet(conf.getDouble)("elbowratio")
+			nbK <- IDSConfigParser.tryGet(conf.getInt)("nbk")
+			lowBound <- IDSConfigParser.tryGet(conf.getLong)("lowbound")
+			upBound <- IDSConfigParser.tryGet(conf.getLong)("upbound")
 		}yield KMeansConfig(trainRatio, minNbK, maxNbK, elbowRatio, nbK, lowBound, upBound)
 	}
 }

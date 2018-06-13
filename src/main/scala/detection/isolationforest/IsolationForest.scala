@@ -18,6 +18,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.util.Try
+import scalaz._
+import Scalaz._
 
 /*
 This detector implements the algorithm described in "Liu, Ting and Zhou. Isolation Forest" (1).
@@ -98,5 +101,21 @@ class IsolationForest(spark: SparkSession, data: DataFrame, dataSize: Long, nbTr
 		val allLengths = trees.map(t => t.pathLength(schema, rowsSeq, 0)).filter(seq => !seq.isEmpty)
 		val sumLengths = allLengths.tail.foldLeft(allLengths.head)((lens1,lens2) => lens1.zip(lens2).map{case (d1, d2) => d1+d2})
 		rowsSeq.zip(sumLengths).map{case (row, sum) => Row.fromSeq(row.toSeq ++ Array[Any](sum))}.toIterator
+	}
+}
+
+object IsolationForest{
+
+	def build(spark: SparkSession, data: DataFrame, featuresStatsFile: String,
+		nbTrees: Int, nbSamples: Int):String\/IsolationForest = {
+		val statsFileName = featuresStatsFile+".parquet"
+		for(
+			stats <- Try(spark.read.parquet(statsFileName)).toDisjunction.leftMap(e =>
+    			"Could not read '"+statsFileName+"' because of "+e.getMessage)
+		)yield{
+			val count = stats.filter(col("summary")===lit("count")).agg(sum(stats.columns(1)))
+			.first.getDouble(0).toLong
+			new IsolationForest(spark, data, count, nbTrees, nbSamples)
+		}
 	}
 }

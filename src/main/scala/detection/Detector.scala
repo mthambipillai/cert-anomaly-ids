@@ -12,8 +12,6 @@ import isolationforest.IsolationForest
 import kmeans.KMeansDetector
 import lof.LOFDetector
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions._
-import scala.util.Try
 import scalaz._
 import Scalaz._
 
@@ -35,18 +33,8 @@ object Detector{
 
 	def getDetector(spark: SparkSession, name: String, conf: IDSConfig, features: DataFrame):String\/Detector ={
 		name match{
-			case "iforest" => {
-				val statsFileName = conf.featuresStatsFile+".parquet"
-				for(
-					stats <- Try(spark.read.parquet(statsFileName)).toDisjunction.leftMap(e =>
-            			"Could not read '"+statsFileName+"' because of "+e.getMessage)
-				)yield{
-					val count = stats.filter(col("summary")===lit("count")).agg(sum(stats.columns(1)))
-					.first.getDouble(0).toLong
-					new IsolationForest(spark, features, count, conf.isolationForest.nbTrees,
-						conf.isolationForest.nbSamples)
-				}
-			}
+			case "iforest" => IsolationForest.build(spark, features, conf.featuresStatsFile,
+				conf.isolationForest.nbTrees, conf.isolationForest.nbSamples)
 			case "kmeans" => {
 				new KMeansDetector(spark, features, conf.kMeans.trainRatio, conf.kMeans.minNbK, 
 					conf.kMeans.maxNbK, conf.kMeans.elbowRatio, conf.kMeans.nbK, conf.kMeans.lowBound,

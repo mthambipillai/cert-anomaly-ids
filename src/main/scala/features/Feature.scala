@@ -167,11 +167,13 @@ object Feature{
 		df.withColumn(newColName, lengthUDF(df(columnName)))
 	}
 
-	private val headUDF = udf((x:String) => x.split(" ")(0))
+	private val headUDF = udf((x:String) => if(x==null) "NULL" else {
+		val arr = x.split(" ")
+		if(arr.length==0) "NULL" else arr(0)
+	})
 	def parseHeadCol(spark: SparkSession, newColName: String)(df: DataFrame, columnName: String): DataFrame = {
 		val withHead = df.withColumn(newColName, headUDF(df(columnName)))
 		val indexer = new HashStringIndexer(spark, newColName, newColName+"2")
-		val df2 = withHead.na.fill("NULLFEATUREVALUE", newColName :: Nil)
-		indexer.transform(df2).drop(newColName).withColumnRenamed(newColName+"2",newColName)
+		indexer.transform(withHead).drop(newColName).withColumnRenamed(newColName+"2",newColName)
 	}
 }

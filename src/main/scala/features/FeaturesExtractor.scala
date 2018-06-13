@@ -38,7 +38,6 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 		for{
 			logFile <- Try(spark.read.parquet(filePath)).toDisjunction.leftMap(e =>
 				"Could not read '"+filePath+"' because of "+e.getMessage)
-			_ = println(logFile.count)
 			_ = logFile.createOrReplaceTempView("logfiles")
 			sqlStmt = "SELECT "+features.filter(_.parent.isEmpty).map(_.name).mkString(",")+" FROM logfiles"
 			df <- Try(spark.sql(sqlStmt)).toDisjunction.leftMap(e =>
@@ -47,7 +46,9 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 			ee = EntityExtractor.getByName(spark, extractor)
 			(df2,newFeatures) <- ee.extract(dfInjected, features, eType)
 		}yield{
-			val res = newFeatures.map(f => f.parseCol(_)).foldLeft(df2){ (previousdf, parser) => parser(previousdf) }
+			val (parentFeatures, childFeatures) = newFeatures.partition(f => f.parent.isEmpty)
+			val orderedFeatures = childFeatures:::parentFeatures
+			val res = orderedFeatures.map(f => f.parseCol(_)).foldLeft(df2){ (previousdf, parser) => parser(previousdf) }
 			(res, newFeatures)
 		}
 	}
@@ -65,7 +66,7 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 		val maxTime = minMax.getDouble(1)
 		val nbIntervals = (((maxTime-minTime)/interval.toMillis)+1).toInt
 		val aggs = features.flatMap(_.aggregate())
-		val newNbPartitions = df.rdd.getNumPartitions * nbIntervals
+		val newNbPartitions = df.rdd.getNumPartitions * math.max(nbIntervals,10)
 		val splits = (1 to nbIntervals).map(i => {
 			val lowB = spark.sparkContext.broadcast(minTime.toDouble + (i-1)*interval.toMillis)
 			val highB = spark.sparkContext.broadcast(lowB.value + interval.toMillis)

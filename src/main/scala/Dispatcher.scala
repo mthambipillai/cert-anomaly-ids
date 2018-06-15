@@ -73,7 +73,7 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 		val eval = new Evaluator(spark)
 		for{
 			(realLogs, injectedLogs) <- ins.getAllLogs(conf.filePath, conf.featuresschema, conf.extractor,
-				conf.anomaliesFile, conf.trafficMode, conf.interval, conf.recall, conf.intrusionsDir)
+				conf.anomaliesFile, conf.trafficMode, conf.interval, conf.recall, conf.intrusionsDir, conf.topAnomalies)
 			_ <- if(conf.recall) eval.evaluateIntrusions(injectedLogs, conf.intrusionsDir) else "".right
 			res <- ins.inspectLogs(realLogs, conf.rules, conf.inspectionResults)
 

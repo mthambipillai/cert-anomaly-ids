@@ -55,7 +55,7 @@ class Inspector(spark: SparkSession){
 	* @param intrusionsDir  directory of the persisted intrusions
 	*/
 	def getAllLogs(filePath: String, features: List[Feature], extractor: String, anomaliesFile: String,
-		eType: String, interval: Duration, recall: Boolean, intrusionsDir: String):String\/(List[DataFrame],List[DataFrame])={
+		eType: String, interval: Duration, recall: Boolean, intrusionsDir: String, n: Int):String\/(List[DataFrame],List[DataFrame])={
 		val ee = EntityExtractor.getByName(spark, extractor)
 		val featuresNames = features.filter(_.parent.isEmpty).map(_.name)
 		val featuresString = featuresNames.mkString(",")
@@ -63,10 +63,10 @@ class Inspector(spark: SparkSession){
 			tempLogFile <- Try(spark.read.parquet(filePath)).toDisjunction.leftMap(e =>
 				"Could not read '"+filePath+"' because of "+e.getMessage)
 			_ = tempLogFile.createOrReplaceTempView("temp")
-			logFile = spark.sql(s"SELECT $featuresString FROM temp")
+			logFile = spark.sql("SELECT "+featuresString+" FROM temp")
 			_ = logFile.createOrReplaceTempView("logfiles")
 			_ <- if(recall) registerIntrusionsLogs(intrusionsDir, featuresNames) else Unit.right
-			(realAnoms, injectedAnoms) <- loadAnoms(anomaliesFile, recall)
+			(realAnoms, injectedAnoms) <- loadAnoms(anomaliesFile, recall, n)
 			_ = println("Fetching matching logs...")
 			allLogs <- realAnoms.zipWithIndex.traverseU{case (row,id) =>
 				for{
@@ -160,11 +160,11 @@ class Inspector(spark: SparkSession){
 	/*
 	Loads anomalies in 2 separate lists : one for real anomalies and one for fake injected anomalies.
 	*/
-	private def loadAnoms(anomaliesFile: String, recall: Boolean): String\/(List[Row], List[Row])={
+	private def loadAnoms(anomaliesFile: String, recall: Boolean, n: Int): String\/(List[Row], List[Row])={
 		println("Loading anomalies from "+anomaliesFile+"...")
 		for{
 			all <- Try(spark.read.format("com.databricks.spark.csv")
-				.option("header", "true").load(anomaliesFile).collect.toList)
+				.option("header", "true").load(anomaliesFile).collect.toList.take(n))
 				.toDisjunction.leftMap(e => "Could not read '"+anomaliesFile+"' because of "+e.getMessage)
 			injected = if(recall) all.filter(_.getString(0).contains("dummy")) else Nil
 			real = all.filterNot(_.getString(0).contains("dummy"))

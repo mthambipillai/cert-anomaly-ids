@@ -41,7 +41,7 @@ case class Optimizer(
 		val precisionsDisj = parameters.traverseU(p => {
 			for{
 				(realLogs, _) <- ins.getAllLogs(filePath, featuresschema, extractor,
-				"temp"+p, trafficMode, interval, false, "")
+				"temp"+p, trafficMode, interval, false, "", topAnomalies)
 				inspectedLogs <- ins.flagLogs(realLogs, rules)
 
 			}yield ins.getPrecision(inspectedLogs)

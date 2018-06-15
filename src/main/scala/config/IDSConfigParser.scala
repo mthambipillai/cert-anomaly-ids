@@ -67,17 +67,21 @@ class IDSConfigParser(spark: SparkSession){
 			opt[Int]('n', "nbtopanomalies").action( (x, c) =>
 				c.copy(topAnomalies = x) ).text("Number of top anomalies to store.").validate( x => {
 					if(x>0 && x<=1000) success else failure("Value must be between 1 and 1000.")
-				}),
-				opt[String]('a', "anomaliesfile").action( (x, c) =>
-					c.copy(anomaliesFile = x) ).text("CSV file to write the detected anomalies to."),
-				opt[String]('e', "ensemblemode").action( (x, c) =>
-					c.copy(ensembleMode = x) ).text("Determines how detectors' scores are combined. mean or max.")
+			}),
+			opt[String]('a', "anomaliesfile").action( (x, c) =>
+				c.copy(anomaliesFile = x) ).text("CSV file to write the detected anomalies to."),
+			opt[String]('e', "ensemblemode").action( (x, c) =>
+				c.copy(ensembleMode = x) ).text("Determines how detectors' scores are combined. mean or max.")
 			)
 		cmd("inspect").action( (_, c) => c.copy(mode = "inspect") ).
 		text("Inspects all the logs for every anomaly detected.").
 		children(
 			opt[String]('a', "anomaliesfile").action( (x, c) =>
 				c.copy(anomaliesFile = x) ).text("CSV file to read the detected anomalies from."),
+			opt[Int]('n', "nbtopanomalies").action( (x, c) =>
+				c.copy(topAnomalies = x) ).text("Number of top anomalies to store.").validate( x => {
+					if(x>0 && x<=1000) success else failure("Value must be between 1 and 1000.")
+			}),
 			opt[String]('r', "rules").action( (x, c) =>
 				c.copy(rules = RulesParser.parse(x).getOrElse(null)) ).text("Source of rules."),
 			opt[String]('i', "inspectionfiles").action( (x, c) =>

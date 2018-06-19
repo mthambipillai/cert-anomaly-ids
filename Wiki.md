@@ -4,11 +4,7 @@
 
 A description of the IDS's pipeline should give a good overview to understand the role of each of the parameters described in the following sections.
 
-The first step is to `extract` the features from the logs. These logs must be stored in `parquet` format. A JSON file describing the schema is needed for the different steps of the extraction.
-
-In case of testing, we can inject fake intrusions at this stage and persist the fake logs to a separate `.parquet` file for later recall measurement evaluation.
-
-Each column of the logs can be of various data types specified by the schema and will be converted to `Double` type.
+The first step is to `extract` the features from the logs. These logs must be stored in `parquet` format. A JSON file describing the schema is needed for the different steps of the extraction. In case of testing, we can inject fake intrusions at this stage and persist the fake logs to a separate `.parquet` file for later recall measurement evaluation. Each column of the logs can be of various data types specified by the schema and will be converted to `Double` type.
 
 Aggregation over a time window is then performed to analyze the behaviour of source / destination entities. For example, the total number of connection attempts made by a specific client every hour, or the total number of bytes received by a server per day. To this end, we must choose whether we aggregate the activities of the sources (clients) or the destinations (servers). We also need to know how to identify the source or destination entities: if there is no authentication of users it's usually done with reverse DNS but if it fails we can fallback to IP addresses or ISPs, etc... The schema must also specify the aggregation functions for each column (sum, max, min, etc...).
 
@@ -18,15 +14,15 @@ The second step is to `detect` anomalies from the features. We need to choose a 
 
 As a last step we need to `inspect` the detected anomalies. Each anomaly has the following fields: the source or destination entity (usually the host resolved by reverse DNS), the timestamp at which the anomaly began, then all the different scaled features values and finally the anomaly score. Based on the duration of the time window we can reconstruct the original logs for each anomaly. Then we need to evaluate if the detected anomalies are true or false positives. In the end, the security analyst should do it but we can flag the logs entries with a set of predefined rules that create tags and comments on every matching log. The number of anomalies recognized as true positives by the rules can then be computed to know the precision measurement.
 
-In case the detected anomaly is one of the fake intrusions we injected in the first step, we can mark the intrusion as detected. The number of fake intrusions detected gives us a recall measurement.
+In case the detected anomaly is one of the fake intrusions we injected in the first step, we can mark the intrusion as detected. The number of fake intrusions detected gives us a recall measurement. Finally, the reconstructed logs with the tags and comments are persisted to one `.csv` file per anomaly.
 
-Finally, the reconstructed logs with the tags and comments are persisted to one `.csv` file per anomaly.
+There is a fourth command which isn't really part of the pipeline: `optimize`. It takes a detector name as input and finds the best parameters for that detector on some specified dataset by doing a grid search on predefined ranges of parameters. For each parameter of the detector, an optimizer is implemented: it computes the precision for different values of that parameter. The values are hardcoded so not configurable yet. It prints to standard output the results.
 
 ## Global Parameters
 
 Every parameter has a flag letter and a consistent name between the configuration and the full flag name. So for every entry `param=...` in `conf/application.conf`, there is a corresponding flag `--param <value>` and a shortcut `-p <value>` for non-global parameters.
 
-The following parameters are global parameters, consistent accross the different commands: `extract`, `detect` and `inspect`.
+The following parameters are global parameters, consistent accross the different commands: `extract`, `detect`, `inspect` and `optimize`.
 
 - `--loglevel`: Defines the log level as a string according to the [log4j levels](https://logging.apache.org/log4j/1.2/apidocs/org/apache/log4j/Level.html)
 - `--featuresschema`: Defines the path and name of the json file of the schema that describes the different columns, their types, aggregation functions, etc... More details about it can be found in the Features Schema subsection.
@@ -74,6 +70,20 @@ The following parameters can be placed after the `inspect` command :
 - `-r, --rules`: Defines the path and name of the json file that describes the inspection rules and their parameters. More details about it can be found in the Rules subsection.
 - `-i, --inspectionfiles`: Defines the path and name of the files where to write the anomalies to. If the amount of logs per anomaly is not too large, there will be one file per anomaly, otherwise some anomaly logs might be split in different files. The extension is `.csv` and is added automatically to the path. So `inspectionfiles=myinspection` will create files like `myinspection-part0001.csv`.
 - `-d, --intrusionsdir`: Defines the path of the folder where to read the injected intrusions and their logs from in case we want to compute recall. This parameter has no effect if `recall=false`. The same parameter is defined for intrusions injection in `extract` but in `conf/application.conf` it is a single parameter.
+
+### Optimize
+
+The following parameters can be placed after the `optimize` command :
+
+- `-d, --detectoropt`: Detector to optimize. So far it can take 3 values:
+	- `iforest`: Tries different number of trees by steps of 10 between 10 and 200. Also tries 128, 256, 512 and 1024 samples.
+	- `kmeans`: Tries different number of clusters between 5 and 35.
+	- `lof`: Tries different number of nearest neighbors between 4 and 10. 
+- `-f, --featuresfile`: Defines the path and name of the file where to read the features from. The extension is `.parquet` and is added automatically to the path. So `featuresfile=myfeatures` will try to read from `myfeatures.parquet`. The same parameter is defined for features creation in `extract` but in `conf/application.conf` it is a single parameter.
+- `-s, --featuresstatsfile`: Defines the path and name of the file where to read the statistics of the features from. Some detectors use these informations such as the number of rows or the min and max of each columns to speed up the processing. The same parameter is defined for features creation in `extract` but in `conf/application.conf` it is a single parameter.
+- `-t, --threshold`: Threshold between 0.0 and 1.0 above which logs are considered as anomalies.
+- `-n, --nbtopanomalies`: Number of top anomalies to evaluate.
+- `-r, --rules`: Defines the path and name of the json file that describes the inspection rules and their parameters. More details about it can be found in the Rules subsection.
 
 ### Features Schema
 

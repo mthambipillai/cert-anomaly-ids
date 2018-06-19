@@ -90,7 +90,7 @@ class IDSConfigParser(spark: SparkSession){
 				c.copy(intrusionsDir = x) ).text("Folder to read the injected intrusions from.")
 		)
 		cmd("optimize").action( (_, c) => c.copy(mode = "optimize") ).
-		text("Inspects all the logs for every anomaly detected.").
+		text("Optimizes the parameters of a detector.").
 		children(
 			opt[String]('d', "detectoropt").action( (x, c) =>
 				c.copy(detectorToOpt = x) ).text("Detector to optimize."),

@@ -93,7 +93,7 @@ class IDSConfigParser(spark: SparkSession){
 		text("Inspects all the logs for every anomaly detected.").
 		children(
 			opt[String]('d', "detectoropt").action( (x, c) =>
-				c.copy(anomaliesFile = x) ).text("Detector to optimize."),
+				c.copy(detectorToOpt = x) ).text("Detector to optimize."),
 			opt[String]('f', "featuresfile").action( (x, c) =>
 				c.copy(featuresFile = x) ).text("Parquet file to read the scaled features from."),
 			opt[String]('s', "featuresstatsfile").action( (x, c) =>
@@ -104,7 +104,7 @@ class IDSConfigParser(spark: SparkSession){
 				if(x>=0.0 && x<=1.0) success else failure("Value must be between 0.0 and 1.0.")
 			}),
 			opt[Int]('n', "nbtopanomalies").action( (x, c) =>
-				c.copy(topAnomalies = x) ).text("Number of top anomalies to store.").validate( x => {
+				c.copy(topAnomalies = x) ).text("Number of top anomalies to evaluate.").validate( x => {
 					if(x>0 && x<=1000) success else failure("Value must be between 1 and 1000.")
 			}),
 			opt[String]('r', "rules").action( (x, c) =>

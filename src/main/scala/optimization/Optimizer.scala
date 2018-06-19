@@ -47,7 +47,11 @@ case class Optimizer(
 			}yield ins.getPrecision(inspectedLogs)
 		})
 		precisionsDisj.map(precisions => precisions.zip(parameters).map{ case (precision, param) =>
-			println("Parameter value '"+param+"' gives a precision of "+precision)
+			if(precision == -1){
+				println("Parameter value '"+param+"' gives an empty result set.")
+			}else{
+				println("Parameter value '"+param+"' gives a precision of "+precision)
+			}
 		})
 	}
 }
@@ -79,7 +83,7 @@ object Optimizer{
 
 	def kmeansNbClusters(spark: SparkSession, data: DataFrame,
 		conf: IDSConfig):String\/(String,List[Int],List[KMeansDetector]) = {
-		val parameters = (10 to 15).toList
+		val parameters = (5 to 35).toList
 		val detectors = parameters.map(k => new KMeansDetector(spark, data, conf.kMeans.trainRatio,
 			conf.kMeans.minNbK, conf.kMeans.maxNbK, conf.kMeans.elbowRatio, k, conf.kMeans.lowBound,
 			conf.kMeans.upBound))

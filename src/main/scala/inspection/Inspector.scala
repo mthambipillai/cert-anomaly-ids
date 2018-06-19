@@ -83,6 +83,7 @@ class Inspector(spark: SparkSession){
 	}
 
 	def flagLogs(allLogs: List[DataFrame], rules: List[Rule]):String\/List[DataFrame]={
+		if(allLogs.isEmpty) return allLogs.right
 		val nbCols = allLogs.head.columns.size
 		val tagIndexB = spark.sparkContext.broadcast(nbCols-2)
 		val commentIndexB = spark.sparkContext.broadcast(nbCols-1)
@@ -121,6 +122,7 @@ class Inspector(spark: SparkSession){
 	}
 
 	def getPrecision(dfs: List[DataFrame]):Double = {
+		if(dfs.isEmpty) return -1.0
 		val anomalyTagIndex = dfs.head.columns.size - 2
 		val nbPositives = dfs.map(df =>
 			df.head.getString(anomalyTagIndex)).filter(t => t=="yes").size

@@ -22,7 +22,7 @@ You can run 4 different commands:
 - `spark-ids inspect`: Reads the previously computed and persisted anomalies and reconstruct the original logs by fetching the original source of logs. A set of user-defined rules are then applied to try to flag the anomalies as true or false positives. The results are then written to csv files for further investigation.
 - `spark-ids optimize`: Performs a grid search optimization for the different parameters of a detector. It is not strictly part of the pipeline, it should be used to tune a detector before actually using it.
 
-Each of these commands takes parameters that are defined in `conf/application.conf` and can be overriden with command line flags. Execute `spark-ids --help` to see how to use them.
+Each of these commands takes parameters that are defined in `conf/application.conf` and can be overriden with command line flags. `conf/application_loader.conf` defines the path and file name of the configuration (`conf/application.conf` by default. You can override it with your own `.conf` file as long as it defines every parameter like in the default `conf/application.conf`. Execute `spark-ids --help` to see how to use them.
 You can find more information about every parameter in the [wiki](https://gitlab.cern.ch/mthambip/IDSv2.2/blob/master/Wiki.md).
 
 ## Example

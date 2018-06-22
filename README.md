@@ -23,7 +23,7 @@ You can run 4 different commands:
 - `spark-ids optimize`: Performs a grid search optimization for the different parameters of a detector. It is not strictly part of the pipeline, it should be used to tune a detector before actually using it.
 
 Each of these commands takes parameters that are defined in `conf/application.conf` and can be overriden with command line flags. `conf/application_loader.conf` defines the path and file name of the configuration (`conf/application.conf` by default. You can override it with your own `.conf` file as long as it defines every parameter like in the default `conf/application.conf`. Execute `spark-ids --help` to see how to use them.
-You can find more information about every parameter in the [wiki](https://gitlab.cern.ch/mthambip/IDSv2.2/blob/master/Wiki.md).
+You can find more information about every parameter in the [wiki](https://github.com/mthambipillai/cert-anomaly-ids/blob/master/Wiki.md).
 
 ## Example
 
@@ -90,4 +90,4 @@ For any change to the code, you need to rebuild the project with `sbt assembly`.
 
 `sudo cp target/scala-2.11/IDS\ Project-assembly-2.0.jar $SPARK_IDS_HOME/jars/ids.jar`
 
-Check out the Contributing section in the [wiki](https://gitlab.cern.ch/mthambip/IDSv2.2/blob/master/Wiki.md) for more details about possible extensions.
+Check out the Contributing section in the [wiki](https://github.com/mthambipillai/cert-anomaly-ids/blob/master/Wiki.md) for more details about possible extensions.

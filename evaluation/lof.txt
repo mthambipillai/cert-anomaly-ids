@@ -1,0 +1,31 @@
+Parameter value '4' gives a precision of 100.0
+Parameter value '5' gives a precision of 100.0
+Parameter value '6' gives an empty result set.
+Parameter value '7' gives a precision of 97.61904761904762
+Parameter value '8' gives an empty result set.
+Parameter value '9' gives a precision of 27.586206896551722
+Parameter value '10' gives a precision of 69.0
+
+Parameter value '4' gives a precision of 100.0                                  
+Parameter value '5' gives a precision of 97.67441860465115
+Parameter value '6' gives a precision of 97.95918367346938
+Parameter value '7' gives an empty result set.
+Parameter value '8' gives a precision of 72.5
+Parameter value '9' gives a precision of 98.5
+Parameter value '10' gives a precision of 85.96491228070175
+
+Parameter value '4' gives a precision of 92.0                                   
+Parameter value '5' gives a precision of 73.5
+Parameter value '6' gives a precision of 99.0
+Parameter value '7' gives an empty result set.
+Parameter value '8' gives a precision of 65.57377049180327
+Parameter value '9' gives a precision of 34.285714285714285
+Parameter value '10' gives a precision of 83.5
+
+4	100		100 	92		97.33
+5	100		97.67	73.5	90.39
+6	na		97.95	99		65.65
+7	97.61	na		na		32.53
+8	na		72.5	65.57	46.02
+9	27.58	98.5	34.28	53.45
+10	69		85.96	83.5	79.48

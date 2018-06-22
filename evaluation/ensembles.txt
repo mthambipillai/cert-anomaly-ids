@@ -1,0 +1,8 @@
+iforest+kmeans (max) : 100%
+kmeans+lof (max) : 95%
+iforest+lof (max) : 91%
+iforest+kmeans(mean) : 86%
+kmeans+lof (mean) : 100%
+iforest+lof (mean) : 55%
+iforest+kmeans+lof (max) : 100%
+iforest+kmeans+lof (mean) : 88%

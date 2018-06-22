@@ -1,0 +1,52 @@
+Parameter value '10' gives a precision of 64.5                                  
+Parameter value '20' gives a precision of 65.5
+Parameter value '30' gives a precision of 66.0
+Parameter value '40' gives a precision of 66.5
+Parameter value '50' gives a precision of 65.5
+Parameter value '60' gives a precision of 66.0
+Parameter value '70' gives a precision of 63.5
+Parameter value '80' gives a precision of 65.5
+Parameter value '90' gives a precision of 66.5
+Parameter value '100' gives a precision of 65.5
+Parameter value '110' gives a precision of 64.5
+Parameter value '120' gives a precision of 66.0
+Parameter value '130' gives a precision of 62.0
+Parameter value '140' gives a precision of 65.5
+Parameter value '150' gives a precision of 65.0
+Parameter value '160' gives a precision of 64.5
+Parameter value '170' gives a precision of 65.5
+Parameter value '180' gives a precision of 65.0
+Parameter value '190' gives a precision of 65.0
+Parameter value '200' gives a precision of 67.5
+
+Parameter value '128' gives a precision of 66.0                                 
+Parameter value '256' gives a precision of 67.0
+Parameter value '512' gives a precision of 65.5
+Parameter value '1024' gives a precision of 63.0
+
+
+Parameter value '10' gives a precision of 69.47368421052632                     
+Parameter value '20' gives a precision of 67.61904761904762
+Parameter value '30' gives a precision of 66.66666666666666
+Parameter value '40' gives a precision of 68.29268292682927
+Parameter value '50' gives a precision of 67.21311475409836
+Parameter value '60' gives a precision of 67.64705882352942
+Parameter value '70' gives a precision of 62.68656716417911
+Parameter value '80' gives a precision of 69.11764705882352
+Parameter value '90' gives a precision of 61.111111111111114
+Parameter value '100' gives a precision of 68.51851851851852
+Parameter value '110' gives a precision of 65.85365853658537
+Parameter value '120' gives a precision of 69.81132075471697
+Parameter value '130' gives a precision of 69.52380952380952
+Parameter value '140' gives a precision of 69.49152542372882
+Parameter value '150' gives a precision of 69.64285714285714
+Parameter value '160' gives a precision of 67.3469387755102
+Parameter value '170' gives a precision of 66.21621621621621
+Parameter value '180' gives a precision of 68.18181818181817
+Parameter value '190' gives a precision of 69.1358024691358
+Parameter value '200' gives a precision of 63.63636363636363
+
+Parameter value '128' gives a precision of 65.5                                 
+Parameter value '256' gives a precision of 67.9245283018868
+Parameter value '512' gives a precision of 80.0
+Parameter value '1024' gives an empty result set.

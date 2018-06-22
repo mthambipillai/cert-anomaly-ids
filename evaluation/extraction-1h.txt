@@ -1,0 +1,35 @@
+Elapsed time: 5.886564392716666min
+Elapsed time: 6.2054356311min
+Elapsed time: 7.269529866966667min
+Elapsed time: 6.9488461275min
+Elapsed time: 5.814689750483334min
+Elapsed time: 7.845482011116667min
+Elapsed time: 8.742954688316667min
+Elapsed time: 7.432152355283334min
+Elapsed time: 5.836919250099999min
+Elapsed time: 6.8918684636666665min
+Elapsed time: 8.8420097008min
+Elapsed time: 6.8142234756499995min
+Elapsed time: 7.864719509466667min
+Elapsed time: 6.269162464550001min
+Elapsed time: 7.329463228133333min
+Elapsed time: 7.8554270157min
+Elapsed time: 6.4327764235min
+Elapsed time: 9.2491197686min
+Elapsed time: 6.493928922616666min
+Elapsed time: 6.9111007509min
+Elapsed time: 10.24527234905min
+Elapsed time: 8.1234609462min
+Elapsed time: 16.330131456633335min
+Elapsed time: 19.91853242135min
+Elapsed time: 33.19582179795min
+Elapsed time: 21.342229716000002min
+Elapsed time: 15.030675879166667min
+Elapsed time: 28.662195967966667min
+Elapsed time: 16.104692804083335min
+Elapsed time: 25.177072443783334min
+Elapsed time: 1.1127800869333333min
+
+avg : 10.9090077311704
+sum : 338.179239666283
+

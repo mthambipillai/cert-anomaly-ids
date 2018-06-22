@@ -1,0 +1,4 @@
+Data Mining for Network Intrusion Detection
+A survey on unsupervised outlier detection in high-dimensional numerical data
+Data perturbation for outlier detection ensembles
+Unsupervised learning algos for intrusion detection 

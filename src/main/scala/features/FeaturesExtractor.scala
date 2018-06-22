@@ -83,40 +83,6 @@ class FeatureExtractor(spark: SparkSession, inject: DataFrame => String\/DataFra
 	}
 
 	/*
-	Returns a DataFrame representing the traffic features from the basic features in 'df' : aggregation over
-	each interval of size 'interval' per src or dst entity defined by 'eType'. They need to be further
-	processed before they can be used for machine learning.
-	*/
-	def extractRawTrafficFeatures2(df: DataFrame, features: List[Feature], interval: Duration,
-		eType: String): DataFrame = {
-		println("Begin to extract traffic features...")
-		val aggs = features.flatMap(_.aggregate())
-		val df2 = withBeginTimeInterval(df, interval)
-		aggregate2(df2, eType, aggs)
-	}
-
-	private def aggregate2(df: DataFrame, eType: String, aggs: List[Column]): DataFrame = {
-		df.groupBy(eType, eType+"Index", "timeinterval").agg(aggs.head, aggs.tail:_*)
-	}
-
-	private def withBeginTimeInterval(df: DataFrame, interval: Duration):DataFrame = {
-		val timestampIndex = df.columns.indexOf("timestamp")
-		val timestampIndexB = spark.sparkContext.broadcast(timestampIndex)
-		val intervalB = spark.sparkContext.broadcast(interval.toMillis)
-		val newSchema = df.schema.add(StructField("timeinterval", DoubleType, true))
-		val encoder = RowEncoder(newSchema)
-		df.mapPartitions(iter => {
-			val timestampIndex = timestampIndexB.value
-			val interval = intervalB.value
-			iter.map(r => {
-				val timestamp = r.getDouble(timestampIndex)
-				val beginInterval = scala.math.floor(timestamp / interval) * interval
-				Row.fromSeq(r.toSeq :+ beginInterval.toDouble)
-			})
-		})(encoder)
-	}
-
-	/*
 	Returns a DataFrame of final features ready for unsupervised machine learning to be
 	applied from a DataFrame 'df' of raw features. Each feature is normalized and kept as a column.
 	'scaleMode' defines the technique used for feature scaling.

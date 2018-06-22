@@ -29,6 +29,10 @@ case class Optimizer(
 	interval: Duration,
 	rules: List[Rule]){
 
+	/*
+	Applies the different detectors on the same data set in 'filePath' and prints the obtained precision
+	for each one of them along with the parameter value associated with the detector.
+	*/
 	def optimize():String\/Unit = {
 		println("Starting to optimize parameter "+name+"...")
 		detectors.zip(parameters).foreach{ case (d,p) => 
@@ -58,6 +62,9 @@ case class Optimizer(
 
 object Optimizer{
 
+	/*
+	Builds an optimizer from a function that generates detectors to evaluate.
+	*/
 	def buildOptimizer(spark: SparkSession, data: DataFrame, conf: IDSConfig,
 		generateDetectors: (SparkSession,DataFrame,IDSConfig) => String\/(String,List[Int],List[Detector])):String\/Optimizer={
 		generateDetectors(spark, data, conf).map{ case (name, p,d) => Optimizer(name, p, d, conf.threshold, conf.topAnomalies,
@@ -65,6 +72,9 @@ object Optimizer{
 			conf.interval, conf.rules)}
 	}
 
+	/*
+	Returns a list of IsolationForest with number of trees between 10 and 200 with a step of 10.
+	*/
 	def iforestNbTrees(spark: SparkSession, data: DataFrame,
 		conf: IDSConfig):String\/(String,List[Int],List[IsolationForest]) = {
 		val parameters = (10 to 200 by 10).toList
@@ -73,6 +83,9 @@ object Optimizer{
 		detectors.map(d => ("nbtrees (Number of trees)", parameters, d))
 	}
 
+	/*
+	Returns a list of IsolationForest with number of samples either 128, 256, 512 or 1024.
+	*/
 	def iforestNbSamples(spark: SparkSession, data: DataFrame,
 		conf: IDSConfig):String\/(String,List[Int],List[IsolationForest]) = {
 		val parameters = List(128,256,512,1024)
@@ -81,6 +94,9 @@ object Optimizer{
 		detectors.map(d => ("nbsamples (Number of samples)", parameters, d))
 	}
 
+	/*
+	Returns a list of KMeansDetector with number of clusters between 5 and 35.
+	*/
 	def kmeansNbClusters(spark: SparkSession, data: DataFrame,
 		conf: IDSConfig):String\/(String,List[Int],List[KMeansDetector]) = {
 		val parameters = (5 to 35).toList
@@ -90,6 +106,9 @@ object Optimizer{
 		("nbk (Number of clusters)", parameters, detectors).right
 	}
 
+	/*
+	Returns a list of LOFDetector with number of nearest neighbors between 4 and 10.
+	*/
 	def lofNbkNN(spark: SparkSession, data: DataFrame,
 		conf: IDSConfig):String\/(String,List[Int],List[LOFDetector]) = {
 		val parameters = (4 to 10).toList

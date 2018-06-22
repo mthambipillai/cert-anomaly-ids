@@ -43,7 +43,7 @@ class Inspector(spark: SparkSession){
 	}
 
 	/*
-	* Returns the reconstructed logs of the anomalies from the original log source as 2 DataFrames :
+	* Returns the reconstructed logs of the anomalies from the original log source as 2 lists of DataFrames :
 	* One for the real logs and one for the fake injected logs if any.
 	* @param filePath  path of the original logs source
 	* @param features  list of features of the schema
@@ -53,6 +53,7 @@ class Inspector(spark: SparkSession){
 	* @param interval  time window used for aggregation
 	* @param recall  true if we injected fake intrusions, false otherwise.
 	* @param intrusionsDir  directory of the persisted intrusions
+	* @param n  number of anomalies to reconstruct
 	*/
 	def getAllLogs(filePath: String, features: List[Feature], extractor: String, anomaliesFile: String,
 		eType: String, interval: Duration, recall: Boolean, intrusionsDir: String, n: Int):String\/(List[DataFrame],List[DataFrame])={
@@ -81,7 +82,10 @@ class Inspector(spark: SparkSession){
 			}
 		}yield (allLogs, if(recall) getInjectedLogs(injectedAnoms, interval) else Nil)
 	}
-
+	
+	/*
+	Applies each rule in 'rules' to each of the reconstructed logs in 'allLogs'
+	*/
 	def flagLogs(allLogs: List[DataFrame], rules: List[Rule]):String\/List[DataFrame]={
 		if(allLogs.isEmpty) return allLogs.right
 		val nbCols = allLogs.head.columns.size
@@ -132,8 +136,8 @@ class Inspector(spark: SparkSession){
 	}
 
 	/*
-	Filter the logs 'all' to count the ones that were flagged as anomalies, then compute
-	precision using 'nbAll' and print it.
+	Filters the logs 'all' to count the ones that were flagged as anomalies, then computes
+	precision and prints it.
 	*/
 	private def printPrecision(dfs: List[DataFrame], resultsFile: String):Unit = {
 		val anomalyTagIndex = dfs.head.columns.size - 2
@@ -179,7 +183,7 @@ class Inspector(spark: SparkSession){
 		val beginTimestamp = row.getString(1).toDouble.toLong
 		val endTimeStamp = beginTimestamp+interval.toMillis
 		for{
-			clause <- ee.reverse2(eType, entity)
+			clause <- ee.reverse(eType, entity)
 		}yield{
 			"SELECT "+featuresString+" FROM logfiles WHERE "+clause+
 				" AND timestamp>="+beginTimestamp+" AND timestamp<="+endTimeStamp

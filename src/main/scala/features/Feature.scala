@@ -29,13 +29,16 @@ case class Feature(
 	private val aggregateAux: List[String => Column]
 ){
 	/*
-	Parses the column 'name' of 'df' to an appropriate type (int or double).
+	Parses the 'df' column corresponding to the feature name or parent name to a numerical type.
 	*/
 	def parseCol(df: DataFrame):DataFrame = parent match{
 		case Some(p) => parseColAux(df,p)
 		case None => parseColAux(df,name)
 	}
 
+	/*
+	Returns the columns resulting of the aggregation of the feature column by different functions.
+	*/
 	def aggregate(): List[Column] = aggregateAux.map(f => f(name))
 }
 
@@ -175,5 +178,13 @@ object Feature{
 		val withHead = df.withColumn(newColName, headUDF(df(columnName)))
 		val indexer = new HashStringIndexer(spark, newColName, newColName+"2")
 		indexer.transform(withHead).drop(newColName).withColumnRenamed(newColName+"2",newColName)
+	}
+
+	def parsePpidBinaryCol(spark: SparkSession)(df: DataFrame, columnName: String): DataFrame = {
+		val pbr = new PpidBinaryResolver(spark)
+		val resolved = pbr.resolve(df)
+		val newColName = "ppid_file"
+		val indexer = new HashStringIndexer(spark, newColName, newColName+"2")
+		indexer.transform(resolved).drop(newColName).withColumnRenamed(newColName+"2",newColName)
 	}
 }

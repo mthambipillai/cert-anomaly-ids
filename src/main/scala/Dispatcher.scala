@@ -41,10 +41,6 @@ class Dispatcher(spark: SparkSession, conf: IDSConfig) extends Serializable{
 				df.right
 			}
 		}
-
-		/*val test = new TestExtractor(spark, inject)
-		test.extractFeaturesStep1(conf.filePath, conf.featuresschema, conf.extractor, conf.interval,
-			conf.trafficMode, conf.scaleMode, conf.featuresFile)*/
 		val fe = new FeatureExtractor(spark, inject)
 		for(
 			finalFeatures <- fe.extractFeatures(conf.filePath, conf.featuresschema, conf.extractor, conf.interval,

@@ -46,19 +46,10 @@ case class EntityExtractor(
 	}
 
 	/*
-	Returns the original column name and the original value that was converted to
+	Returns the SQL clause to fetch the original value that was converted to
 	'entityValue' in the entity extraction phase.
 	*/
-	def reverse(eType: String, entityValue: String):String\/(String, String) = {
-		val (colName, value) = reverseAux(eType, entityValue).head
-		if(requiredColumns.contains(colName)){
-			(colName, value).right
-		}else{
-			("The original column must be a required column.").left
-		}
-	}
-
-	def reverse2(eType: String, entityValue: String):String\/String = {
+	def reverse(eType: String, entityValue: String):String\/String = {
 		val clausesDisj = reverseAux(eType, entityValue).traverseU{ case (colName, value) =>
 			if(requiredColumns.contains(colName)){
 				(colName+"='"+value+"'").right

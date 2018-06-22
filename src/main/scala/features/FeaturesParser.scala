@@ -49,6 +49,7 @@ class FeaturesParser(spark: SparkSession) extends Serializable{
 		case "Hour" => (Feature.parseHourCol _).right
 		case "Length" => (Feature.parseLengthCol(name) _).right
 		case "Head" => (Feature.parseHeadCol(spark,name) _).right
+		case "PpidBinary" => (Feature.parsePpidBinaryCol(spark) _).right
 		case t => ("Unknown type '"+t+"' for parsing feature.").left
 	}
 

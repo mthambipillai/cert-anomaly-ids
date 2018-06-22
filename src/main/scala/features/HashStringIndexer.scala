@@ -11,7 +11,9 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.SparkSession
-
+/*
+Provides a way to convert a column of Strings to Doubles using locality-sensitive hashing.
+*/
 class HashStringIndexer(spark: SparkSession, inputCol: String="", outputCol: String="") extends Serializable{
 
 	def setInputCol(value: String):HashStringIndexer = new HashStringIndexer(spark, value, outputCol)

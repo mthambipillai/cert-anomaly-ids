@@ -12,10 +12,9 @@ The pipeline is divided into 3 steps: features extraction, anomaly detection and
 
 - `git clone` the project
 - `cd` into it
-- run `sbt assembly` to create the packaged jar file in `target/scala-2.11/CERT-Anomaly-IDS.jar
-- 
-- Linux with root privileges: run `sh install-ids.sh`.
-- Other cases: extract the files from the `spark-ids.tar.gz` archive, copy `jars/ids.jar` to the root of the project and set an alias in your `~/.bashrc`: `alias spark-ids='spark-submit ids.jar'`. Please note that in this case you cannot run it from another directory.
+- run `sbt assembly` to create the packaged jar file in `target/scala-2.11/CERT-Anomaly-IDS.jar`
+- run the program using `spark-submit target/scala-2.11/CERT-Anomaly-IDS.jar`
+- The rpm is not yet publicly distributed so if you want to use a single command (`cert-anomaly-ids` in the next section and in the wiki), then you have to install the command in your `PATH` or create an alias in your `~/.bashrc`.
 
 ## Usage
 
